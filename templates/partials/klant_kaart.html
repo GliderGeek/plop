@@ -1,0 +1,13 @@
+<div class="klant" id="klant-{{ k.k.id }}">
+  <div class="klant-kop">
+    <strong>{{ k.k.naam }}</strong>
+    <span class="totaal-badge">{{ k.totaal }} fl.</span>
+    <button class="link" hx-get="{{ url_for('klant_bewerk', klant_id=k.k.id) }}" hx-target="closest .klant" hx-swap="outerHTML">bewerk</button>
+  </div>
+  <div class="chips">
+    {% for w in vaste %}{% if k.vast.get(w.id) %}<span class="chip basis">{{ w.naam }} {{ k.vast[w.id] }}</span>{% endif %}{% endfor %}
+    {% if k.nodig.iets_luxer %}<span class="chip iets_luxer">Iets luxer {{ k.nodig.iets_luxer }}</span>{% endif %}
+    {% if k.nodig.luxe %}<span class="chip luxe">Luxe {{ k.nodig.luxe }}</span>{% endif %}
+  </div>
+  {% if k.k.aantekening %}<div class="wens">{{ k.k.aantekening }}</div>{% endif %}
+</div>

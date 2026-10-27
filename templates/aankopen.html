@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "partials/iconen.html" import icoon %}
+{% block main %}
+<div class="kop-met-knop">
+  <h1>Aankopen</h1>
+  <a class="knop" href="{{ url_for('aankoop_nieuw') }}">+ Nieuwe aankoop</a>
+</div>
+{% for b in aankopen %}
+<div class="kaart">
+  <div class="klant-kop">
+    <strong>{{ b.a.omschrijving or 'Aankoop' }}</strong>
+    <span class="totaal-badge">{{ b.totaal }} fl.</span>
+    <a class="icoon-knop" href="{{ url_for('aankoop_bewerk', aankoop_id=b.a.id) }}" title="Bewerken" aria-label="Bewerken">{{ icoon('pen') }}</a>
+    <form method="post" action="{{ url_for('aankoop_verwijder', aankoop_id=b.a.id) }}" hx-confirm="Aankoop {{ b.a.omschrijving }} verwijderen?">
+      <button class="icoon-knop gevaar-tekst" title="Verwijderen" aria-label="Verwijderen">{{ icoon('prullenbak') }}</button>
+    </form>
+  </div>
+  {% for x in b.regels %}{% set r = x.r %}
+  <div class="bon-regel">
+    <div class="klant-kop">
+      <span>{{ r.aantal }} × {{ r.naam }}</span>
+      <span class="chip {{ r.categorie }}">{{ CATEGORIEEN[r.categorie] }}</span>
+      {% if r.prijs is not none %}<span class="klein-tekst">{{ r.prijs|euro }}</span>{% endif %}
+    </div>
+    <div class="chips">{% for via, n in x.verdeling.items() %}<span class="chip">{{ via }}: {{ n }}</span>{% endfor %}</div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="uitleg">Nog geen aankopen.</p>
+{% endfor %}
+{% endblock %}

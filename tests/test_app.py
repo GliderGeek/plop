@@ -1,0 +1,85 @@
+import os
+import tempfile
+
+# vóór het importeren van app: die opent (en migreert) de database bij het laden
+os.environ["CHAMPAGNE_DB"] = os.path.join(tempfile.mkdtemp(), "test.db")
+
+import pytest
+from werkzeug.datastructures import MultiDict
+
+import app as app_module
+import db
+import logic
+
+HTMX = {"HX-Request": "true"}
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    pad = str(tmp_path / "app.db")
+    monkeypatch.setattr(app_module, "DB_PATH", pad)
+    c = db.connect(pad)
+    db.init(c)
+    c.close()
+    app_module.app.config["TESTING"] = True
+    return app_module.app.test_client()
+
+
+@pytest.fixture
+def conn():
+    c = db.connect(app_module.DB_PATH)
+    yield c
+    c.close()
+
+
+def vias():
+    return [{"code": c} for c in ("dd", "j", "h", "m", "hm")]
+
+
+def test_regels_uit_form():
+    f = MultiDict({
+        "regel-0-naam": "Tissier Juliette", "regel-0-categorie": "iets_luxer", "regel-0-via-dd": "2",
+        "regel-1-naam": "", "regel-1-categorie": "basis", "regel-1-vast": "Pertois ½", "regel-1-via-j": "3",
+        "regel-2-naam": " ", "regel-2-via-dd": "0", "regel-2-via-j": "",  # leeg, ook met getypte 0
+    })
+    regels = app_module.regels_uit_form(f, vias())
+    assert [(r["naam"], r["categorie"]) for r in regels] == [("Tissier Juliette", "iets_luxer"), ("Pertois ½", None)]
+    assert regels[1]["verdeling"]["j"] == "3"
+
+
+def test_aankoop_opslaan_en_fout_via_htmx(client, conn):
+    r = client.post("/aankoop", data={"omschrijving": "Tissier", "regel-0-naam": "Juliette",
+                                      "regel-0-categorie": "luxe", "regel-0-via-dd": "2"})
+    assert r.status_code == 303
+    bon = logic.aankopen(conn)[0]
+    r = client.post(f"/aankoop/{bon['a']['id']}", headers=HTMX,
+                    data={"versie": bon["a"]["versie"] + 1, "regel-0-naam": "Juliette",
+                          "regel-0-categorie": "luxe", "regel-0-via-dd": "3"})
+    assert r.headers["HX-Retarget"] == "#melding" and "intussen gewijzigd" in r.text
+    assert logic.aankopen(conn)[0]["totaal"] == 2
+
+
+def test_ongeldige_post_geeft_melding_geen_500(client):
+    r = client.post("/toekenning", headers=HTMX, data={"klant_id": "x", "wine_id": "1", "delta": "1"})
+    assert r.status_code == 200 and r.headers["HX-Retarget"] == "#melding"
+    r = client.post("/overdracht", headers=HTMX, data={"wine_id": "1", "van_via": "dd", "naar_via": "zz"})
+    assert r.headers["HX-Retarget"] == "#melding"
+
+
+def test_onbekende_klant_geeft_404(client):
+    assert client.get("/klant/999").status_code == 404
+    assert client.get("/klant/999/bewerk").status_code == 404
+
+
+def test_klant_bewerken_stuurt_versie_mee(client, conn):
+    client.post("/klant", data={"via": "dd", "naam": "Joris", "iets_luxer_n": "2"})
+    k = logic.klanten(conn)[0]
+    assert f'name="versie" value="{k["k"]["versie"]}"' in client.get(f"/klant/{k['k']['id']}/bewerk").text
+    r = client.post(f"/klant/{k['k']['id']}", headers=HTMX,
+                    data={"via": "dd", "naam": "Joris", "iets_luxer_n": "3", "versie": k["k"]["versie"]})
+    assert r.status_code == 200 and "Iets luxer 3" in r.text
+
+
+def test_paginas_renderen(client):
+    for url in ("/", "/bestellingen", "/aankopen", "/aankoop/nieuw", "/via/dd"):
+        assert client.get(url).status_code == 200, url

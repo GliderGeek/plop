@@ -1,0 +1,16 @@
+# Excel (de oude sheet en eventuele lock-bestanden)
+*.xlsx
+*.xls
+~$*
+
+# database met echte gegevens
+*.db
+*.db-journal
+
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+.DS_Store

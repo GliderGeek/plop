@@ -1,0 +1,21 @@
+[project]
+name = "champagne"
+version = "0.1.0"
+description = "Webapp voor het beheren van champagnebestellingen tijdens de trip"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "flask>=3.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[tool.uv]
+package = false  # app, geen installeerbaar package
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

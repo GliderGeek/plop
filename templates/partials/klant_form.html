@@ -1,0 +1,9 @@
+{% from "partials/klant_velden.html" import klant_velden with context %}
+<form class="klant bewerken" hx-post="{{ url_for('klant_opslaan', klant_id=k.k.id) }}" hx-target="this" hx-swap="outerHTML">
+  {{ klant_velden(vaste, k) }}
+  <div class="knoppen">
+    <button type="submit">Opslaan</button>
+    <button type="button" class="secundair" hx-get="{{ url_for('klant_toon', klant_id=k.k.id) }}" hx-target="closest .klant" hx-swap="outerHTML">Annuleer</button>
+    <button type="button" class="gevaar" hx-post="{{ url_for('klant_verwijder', klant_id=k.k.id) }}" hx-confirm="{{ k.k.naam }} verwijderen?" hx-target="closest .klant" hx-swap="outerHTML">Verwijder</button>
+  </div>
+</form>

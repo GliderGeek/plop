@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% from "partials/iconen.html" import icoon %}
+
+{% macro regel(i, x=None, open=False) %}
+{% set r = x.r if x else None %}
+{% set is_basis = r and r.is_vast %}
+{# oorspronkelijke keuze: alleen dan telt de opgeslagen verdeling (data-start) al mee in 'nog' #}
+<div class="kaart regel {{ 'open' if open }}" data-regel
+     data-orig-cat="{{ ('basis' if is_basis else r.categorie) if r }}" data-orig-wijn="{{ r.naam if r }}">
+  {# ingeklapt: één samenvattingsregel; JS houdt hem bij, de server vult hem alvast #}
+  <button type="button" class="regel-samenvatting" data-open-regel>
+    <span class="sam-naam">{{ r.naam if r else 'Nieuwe wijn' }}</span>
+    <span class="sam-aantal">{{ r.aantal if r }}</span>
+    <span class="sam-status"></span>
+  </button>
+
+  <div class="regel-inhoud">
+    <div class="regel-kop">
+      <button type="button" class="link" data-sluit-regel aria-label="Inklappen">▼</button>
+      <div class="pills" role="radiogroup" aria-label="Categorie">
+        <label class="pill basis"><input type="radio" name="regel-{{ i }}-categorie" value="basis" {{ 'checked' if is_basis }}>Basis</label>
+        {% for c in ZOEK_CATEGORIEEN %}
+          <label class="pill {{ c }}"><input type="radio" name="regel-{{ i }}-categorie" value="{{ c }}" {{ 'checked' if r and r.categorie == c }}>{{ CATEGORIEEN[c] }}</label>
+        {% endfor %}
+      </div>
+      <button type="button" class="link gevaar-tekst" data-verwijder-regel aria-label="Regel verwijderen" title="Verwijderen">{{ icoon('prullenbak') }}</button>
+    </div>
+
+    <div class="wijn-velden">
+      <label class="wijn-los" {{ 'hidden' if is_basis }}>Wijn
+        <input name="regel-{{ i }}-naam" list="wijnlijst" autocomplete="off" value="{{ r.naam if r and not is_basis }}"
+               placeholder="bijv. Tissier Juliette">
+      </label>
+      <label class="wijn-vast" {{ 'hidden' if not is_basis }}>Basisfles
+        <select name="regel-{{ i }}-vast">
+          {% for n in vaste_namen %}<option {{ 'selected' if r and r.naam == n }}>{{ n }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Prijs
+        <input name="regel-{{ i }}-prijs" inputmode="decimal" placeholder="€" value="{{ r.prijs|getal if r }}">
+      </label>
+    </div>
+
+    <div class="verdeling">
+      {% for v in alle_vias %}
+      <div class="verdeel-cel">
+        <div class="verdeel-kop"><strong>{{ v.code }}</strong> <span class="nog-info" hidden></span></div>
+        <div class="stepper">
+          <button type="button" class="secundair" data-step="-1">−</button>
+          <input type="number" min="0" inputmode="numeric" name="regel-{{ i }}-via-{{ v.code }}" class="verdeel"
+                 data-via="{{ v.code }}" data-start="{{ x.verdeling.get(v.code, 0) if x else 0 }}"
+                 value="{{ x.verdeling.get(v.code, '') if x }}">
+          <button type="button" class="secundair" data-step="1">+</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="teller">&nbsp;</p>
+  </div>
+</div>
+{% endmacro %}
+
+{% block main %}
+<h1>{{ 'Aankoop bewerken' if bon else 'Nieuwe aankoop' }}</h1>
+<form method="post" data-bewaak action="{{ url_for('aankoop_opslaan', aankoop_id=bon.a.id) if bon else url_for('aankoop_opslaan') }}">
+  {% if bon %}<input type="hidden" name="versie" value="{{ bon.a.versie }}">{% endif %}
+  <label class="wijnhuis">Naam
+    <input name="omschrijving" value="{{ bon.a.omschrijving if bon }}" placeholder="bijv. Tissier">
+  </label>
+
+
+  <datalist id="wijnlijst">{% for n in wijnnamen %}<option value="{{ n }}">{% endfor %}</datalist>
+
+  {# per categorie (en bij basis per fles) per via: hoeveel er nog nodig is #}
+  <h2 class="regels-kop">Wijnen</h2>
+  <div id="regels" data-nog='{{ nog|tojson }}'>
+    {% if bon %}{% for x in bon.regels %}{{ regel(loop.index0, x) }}{% endfor %}{% else %}{{ regel(0, open=True) }}{% endif %}
+  </div>
+  <template id="regel-sjabloon">{{ regel('__i__', open=True) }}</template>
+
+  <div class="actiebalk">
+    <a class="knop secundair" href="{{ url_for('aankopen') }}">Annuleren</a>
+    <button type="button" class="secundair" id="regel-toevoegen">+ wijn toevoegen</button>
+    <button type="submit">Aankoop opslaan</button>
+  </div>
+</form>
+{% endblock %}

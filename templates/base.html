@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Champagne{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='htmx.min.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body hx-boost="true">
+  <nav class="nav">
+    <a href="{{ url_for('overzicht') }}" class="{{ 'actief' if request.endpoint == 'overzicht' }}">Overzicht</a>
+    {% for v in alle_vias %}
+      <a href="{{ url_for('via', code=v.code) }}" class="via-link {{ 'actief' if request.view_args and request.view_args.get('code') == v.code }}">{{ v.code }}</a>
+    {% endfor %}
+    <a href="{{ url_for('bestellingen') }}" class="{{ 'actief' if request.endpoint == 'bestellingen' }}">Bestellingen</a>
+    <a href="{{ url_for('aankopen') }}" class="{{ 'actief' if request.endpoint in ('aankopen', 'aankoop_nieuw', 'aankoop_bewerk') }}">Aankopen</a>
+  </nav>
+  <div id="melding">
+    {% with berichten = get_flashed_messages(with_categories=true) %}
+      {% for cat, m in berichten %}
+        {% if cat == 'ok' %}<div class="melding ok">{{ m }}</div>
+        {% else %}{% with fout = m %}{% include "partials/melding.html" %}{% endwith %}{% endif %}
+      {% endfor %}
+    {% endwith %}
+  </div>
+  <main>
+    {% block main %}{% endblock %}
+  </main>
+</body>
+</html>

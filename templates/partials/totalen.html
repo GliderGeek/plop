@@ -1,0 +1,29 @@
+<section id="totalen" class="kaart" {% if oob %}hx-swap-oob="true"{% endif %}>
+  <h2>Totalen</h2>
+  <div class="tabel-scroll">
+  <table class="totalen">
+    <thead><tr>
+      <th>Via</th>
+      {% for w in vaste %}<th title="{{ w.naam }}">{{ w.naam|kort }}</th>{% endfor %}
+      <th title="Iets luxer">IL</th><th title="Luxe">LX</th><th>Tot.</th>
+    </tr></thead>
+    <tbody>
+      {% for v in alle_vias %}{% set t = totalen[v.code] %}
+      <tr>
+        <td>{{ v.code }}</td>
+        {% for w in vaste %}<td>{{ t.vast[w.id] or '' }}</td>{% endfor %}
+        <td>{{ t.iets_luxer or '' }}</td><td>{{ t.luxe or '' }}</td><td><strong>{{ t.totaal or '' }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>{% set t = totalen['_'] %}
+      <tr>
+        <td>Samen</td>
+        {% for w in vaste %}<td>{{ t.vast[w.id] }}</td>{% endfor %}
+        <td>{{ t.iets_luxer }}</td><td>{{ t.luxe }}</td><td>{{ t.totaal }}</td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+  <p class="uitleg">{% for w in vaste %}{{ w.naam|kort }} = {{ w.naam }}{{ ', ' if not loop.last }}{% endfor %}. IL = Iets luxer, LX = Luxe.</p>
+</section>

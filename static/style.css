@@ -1,0 +1,318 @@
+:root {
+  --bg: #f6f3ec;
+  --kaart: #fff;
+  --tekst: #2a2522;
+  --zacht: #7a716a;
+  --rand: #e4ddd0;
+  --accent: #8a6d1f;
+  --accent-tekst: #fff;
+  --ok: #2f7d4a;
+  --overschot: #b4561c;
+  --fout: #b3261e;
+  --basis: #efe7d2;
+  /* categoriekleuren: fles + lichte tint voor badges/knoppen */
+  --cat-basis: #4f8a3c;
+  --cat-basis-zacht: #e3eedc;
+  --cat-iets: #2f5d8a;
+  --cat-iets-zacht: #dde7f2;
+  --cat-luxe: #7a2e4f;
+  --cat-luxe-zacht: #f0dde6;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1916;
+    --kaart: #26231f;
+    --tekst: #eee7dc;
+    --zacht: #a59b8f;
+    --rand: #3a352f;
+    --accent: #c9a646;
+    --accent-tekst: #1b1916;
+    --ok: #6cc28b;
+    --overschot: #e89a5e;
+    --fout: #f08a80;
+    --basis: #3a3324;
+    --cat-basis: #6aa957;
+    --cat-basis-zacht: #2c3a27;
+    --cat-iets: #5b8cc0;
+    --cat-iets-zacht: #24303d;
+    --cat-luxe: #b0597f;
+    --cat-luxe-zacht: #3d2a33;
+  }
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--tekst); line-height: 1.4; }
+main { max-width: 760px; margin: 0 auto; padding: 0 16px 48px; }
+h1 { font-size: 1.5rem; margin: 20px 0 12px; }
+h2 { font-size: 1.1rem; margin: 22px 0 8px; }
+h2 small { font-weight: normal; color: var(--zacht); }
+a { color: var(--accent); }
+
+/* navigatie */
+.nav {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; gap: 4px; overflow-x: auto; padding: 8px 12px;
+  background: var(--kaart); border-bottom: 1px solid var(--rand);
+}
+.nav a {
+  flex: none; padding: 8px 10px; border-radius: 8px;
+  text-decoration: none; color: var(--tekst); white-space: nowrap;
+}
+.nav a.actief { background: var(--basis); font-weight: 600; }
+.nav a.via-link { min-width: 40px; text-align: center; font-weight: 600; }
+
+/* meldingen */
+#melding { position: sticky; top: 54px; z-index: 9; max-width: 760px; margin: 0 auto; padding: 0 16px; }
+.melding { margin-top: 8px; padding: 10px 12px; border-radius: 8px; display: flex; align-items: center; gap: 8px; }
+.melding > span { flex: 1; }
+.melding .sluit { background: none; color: inherit; min-height: 0; padding: 0 4px; font-size: 1.4rem; line-height: 1; }
+.melding.ok { animation: verdwijn .4s ease 3s forwards; }
+@keyframes verdwijn { to { opacity: 0; visibility: hidden; height: 0; padding: 0; margin: 0; } }
+.melding.fout { background: var(--fout); color: #fff; }
+.melding.ok { background: var(--ok); color: #fff; }
+
+/* kaarten */
+.kaart {
+  display: block; background: var(--kaart); border: 1px solid var(--rand);
+  border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+  color: inherit; text-decoration: none;
+}
+.kaart h2 { margin: 0 0 8px; }
+.cijfers { display: flex; gap: 8px; }
+.cijfer { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.cijfer .label { font-size: .8rem; color: var(--zacht); }
+.cijfer .groot { font-size: 2rem; font-weight: 700; line-height: 1.1; }
+.groot.klaar { color: var(--ok); }
+.groot.overschot { color: var(--overschot); }
+.klein-tekst { font-size: .8rem; color: var(--zacht); }
+.uitleg { color: var(--zacht); font-size: .85rem; }
+
+/* klanten */
+.klant { background: var(--kaart); border: 1px solid var(--rand); border-radius: 12px; padding: 10px 14px; margin-bottom: 8px; }
+.klant-kop { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.klant-kop strong { margin-right: auto; }
+.totaal-badge { font-size: .8rem; color: var(--zacht); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.chip { font-size: .8rem; padding: 2px 8px; border-radius: 999px; background: var(--basis); white-space: nowrap; }
+.chip.basis { background: var(--cat-basis-zacht); }
+.chip.iets_luxer { background: var(--cat-iets-zacht); }
+.chip.luxe { background: var(--cat-luxe-zacht); }
+.chip.klaar { outline: 1px solid var(--ok); }
+.chip.teveel { background: var(--fout); color: #fff; }
+.wens {
+  margin-top: 6px; padding: 6px 10px; border-left: 3px solid var(--accent);
+  background: var(--basis); border-radius: 4px; font-style: italic;
+}
+.via-groep h2 { text-transform: uppercase; letter-spacing: .05em; }
+details.nieuw > summary, details > summary { cursor: pointer; color: var(--accent); padding: 6px 0; }
+
+/* formulieren */
+label { display: flex; flex-direction: column; font-size: .85rem; color: var(--zacht); gap: 2px; margin-bottom: 8px; }
+input, select, textarea, button { font: inherit; font-size: 16px; }
+input:not([type=radio]), select { height: 44px; }
+input, select, textarea {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--rand); border-radius: 8px;
+  background: var(--bg); color: var(--tekst);
+}
+.rij { display: flex; gap: 8px; flex-wrap: wrap; }
+.rij > label { flex: 1 1 100px; justify-content: space-between; }  /* veld onderaan, ook als label wrapt */
+.rij > label.breed { flex: 3 1 180px; }
+.rij.aantallen { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }  /* gelijke breedtes, ook na afbreken */
+fieldset { border: 1px solid var(--rand); border-radius: 8px; margin: 0 0 8px; }
+button {
+  padding: 8px 16px; border: 0; border-radius: 8px; cursor: pointer;
+  background: var(--accent); color: var(--accent-tekst); font-weight: 600; min-height: 40px;
+}
+button.secundair { background: var(--basis); color: var(--tekst); }
+button.gevaar { background: var(--fout); color: #fff; }
+button.link { background: none; color: var(--accent); padding: 4px; min-height: 0; font-weight: normal; }
+.gevaar-tekst { color: var(--fout) !important; }
+.fout-tekst { color: var(--fout); }
+.knoppen { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.knoppen form { margin: 0; }
+form.inline { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+form.inline select { flex: 1; min-width: 0; }
+input.smal { width: 80px; flex: none; }
+.verwijder-onder { margin: -6px 0 12px; text-align: right; }
+
+/* aankoop */
+.verdeling { display: flex; flex-direction: column; gap: 6px; }
+.stepper { display: flex; align-items: center; gap: 4px; }
+.stepper form { margin: 0; }
+.stepper button { width: 44px; padding: 0; }
+.stepper input { width: 64px; text-align: center; }
+.stepper .aantal { min-width: 28px; text-align: center; font-weight: 700; }
+.teller { font-weight: 600; }
+
+/* via-pagina */
+.toekenning { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; }
+.wijn-rij { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.wijn-rij input[name=naam] { flex: 1 1 200px; width: auto; }
+.wijn-rij select { width: auto; }
+
+/* totalen */
+.tabel-scroll { overflow-x: auto; }
+table.totalen { border-collapse: collapse; width: 100%; font-size: .9rem; }
+.totalen th, .totalen td { padding: 4px 6px; text-align: right; border-bottom: 1px solid var(--rand); }
+.totalen th:first-child, .totalen td:first-child { text-align: left; }
+.totalen tfoot td { font-weight: 700; }
+.overschot-tekst { color: var(--overschot); }
+
+/* pool: tegels met fles-icoon */
+.pool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.pool-tegel { background: var(--kaart); border: 1px solid var(--rand); border-radius: 12px; padding: 10px 8px; }
+.fles { --fles: var(--cat-basis); }
+.fles.iets_luxer { --fles: var(--cat-iets); }
+.fles.luxe { --fles: var(--cat-luxe); }
+.pool-tegel { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; }
+.menu-knop {
+  position: absolute; top: 4px; right: 4px; min-height: 0; width: 32px; height: 32px; padding: 0;
+  background: none; color: var(--zacht); font-size: 1.2rem; line-height: 1; border-radius: 8px;
+}
+.menu-knop:hover { background: var(--basis); }
+.popup {
+  border: 1px solid var(--rand); border-radius: 14px; padding: 16px; width: min(360px, calc(100vw - 32px));
+  background: var(--kaart); color: var(--tekst); box-shadow: 0 10px 40px rgba(0, 0, 0, .25); text-align: left;
+}
+.popup::backdrop { background: rgba(0, 0, 0, .3); }
+.popup h3 { margin: 0 0 12px; font-size: 1rem; }
+.fles { position: relative; display: block; height: 64px; width: 48px; }
+.fles svg { height: 64px; width: 24px; display: block; margin: 0 auto; }
+.fles .glas { fill: var(--fles); }
+.fles .folie { fill: #c9a646; }
+.fles .etiket { fill: var(--kaart); opacity: .85; }
+.bol {
+  position: absolute; right: -6px; bottom: 2px; min-width: 28px; height: 28px; padding: 0 6px;
+  border-radius: 999px; background: var(--fles); color: #fff; font-weight: 700; font-size: .95rem;
+  display: flex; align-items: center; justify-content: center; border: 2px solid var(--kaart);
+}
+.tegel-naam { font-weight: 600; font-size: .9rem; line-height: 1.2; }
+.fles.fles-klein { height: 28px; width: 12px; display: inline-block; vertical-align: middle; }
+.fles.fles-klein svg { height: 28px; width: 11px; }
+.toekenning-naam { display: flex; align-items: center; gap: 8px; }
+.kop-met-knop { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+a.knop {
+  display: inline-flex; align-items: center; min-height: 40px; padding: 8px 16px; border-radius: 8px;
+  background: var(--accent); color: var(--accent-tekst); font-weight: 600; text-decoration: none; white-space: nowrap;
+}
+
+/* toekennen met knopjes per vrije wijn */
+.toevoeg-knoppen { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.toevoeg-knoppen form { margin: 0; }
+.toevoeg-knop {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 12px 4px 10px;
+  border-radius: 999px; background: var(--kaart); color: var(--tekst); font-weight: 500;
+  border: 1px dashed var(--rand);
+}
+.toevoeg-knop.iets_luxer { background: var(--cat-iets-zacht); }
+.toevoeg-knop.luxe { background: var(--cat-luxe-zacht); }
+.toevoeg-knop .fles.fles-klein { height: 22px; }
+.toevoeg-knop .fles.fles-klein svg { height: 22px; width: 9px; }
+details.meer > summary { font-size: .85rem; padding: 8px 0 0; }
+
+/* nog open: vage gestippelde flesjes */
+.nog-open { display: flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--zacht); font-size: .9rem; }
+.spook-rij { display: inline-flex; gap: 2px; }
+.fles.spook .glas { fill: var(--fles); fill-opacity: .12; stroke: var(--fles); stroke-width: 2; stroke-dasharray: 3 2.5; }
+.fles.spook .folie, .fles.spook .etiket { display: none; }
+
+/* bon met meerdere wijnregels */
+label.wijnhuis { font-size: 1rem; font-weight: 600; color: var(--tekst); }
+label.wijnhuis input {
+  font-size: 1.3rem; font-weight: 700; height: 48px; padding: 4px 0; background: transparent;
+  border: 0; border-bottom: 2px solid var(--rand); border-radius: 0;
+}
+label.wijnhuis input:focus { outline: none; border-bottom-color: var(--accent); }
+.regels-kop { margin: 18px 0 8px; font-size: .85rem; font-weight: 600; color: var(--zacht); text-transform: uppercase; letter-spacing: .05em; }
+.bon-regel { padding: 6px 0; border-top: 1px solid var(--rand); margin-top: 6px; }
+.bon-regel .klant-kop span:first-child { margin-right: auto; }
+
+/* basisflessen per fles */
+.vast-rij { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--rand); font-size: .9rem; }
+.vast-rij .label { font-size: .8rem; color: var(--zacht); }
+.klaar-tekst { color: var(--ok); }
+.toevoeg-knop.basis { background: var(--cat-basis-zacht); }
+
+[hidden] { display: none !important; }
+.nog-info { font-size: .85rem; color: var(--zacht); white-space: nowrap; }
+
+/* overzichtstabel */
+.tabel-kaart { padding: 0; overflow: hidden; }
+table.overzicht { border-collapse: collapse; width: 100%; font-size: .95rem; }
+.overzicht th, .overzicht td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--rand); white-space: nowrap; }
+.overzicht thead th { font-size: .75rem; font-weight: 600; color: var(--zacht); vertical-align: bottom; }
+.overzicht th:first-child { text-align: left; position: sticky; left: 0; background: var(--kaart); }
+.overzicht tbody th { font-weight: 700; }
+.overzicht tbody tr:last-child th, .overzicht tbody tr:last-child td { border-bottom: 0; }
+.overzicht td.nog { font-weight: 700; }
+.overzicht td.klaar { color: var(--zacht); }
+.overzicht td.te-veel { background: var(--overschot); color: #fff; font-weight: 700; }
+
+/* aankoopformulier: compacte wijnregels die inklappen tot één samenvatting */
+.regel { padding: 0; overflow: hidden; }
+.regel:not(.open) .regel-inhoud { display: none; }
+.regel.open .regel-samenvatting { display: none; }
+.regel-inhoud { padding: 10px 14px 4px; }
+.regel-samenvatting {
+  display: flex; align-items: baseline; gap: 10px; width: 100%; min-height: 0; padding: 12px 14px;
+  background: none; color: var(--tekst); font-weight: 400; text-align: left; border-radius: 0;
+}
+.regel-samenvatting::before { content: "▶"; color: var(--accent); font-size: .7rem; align-self: center; }
+.sam-naam { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.sam-aantal { font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.sam-aantal:not(:empty)::before { content: "× "; color: var(--zacht); font-weight: 400; }
+.sam-status { margin-left: auto; font-weight: 700; white-space: nowrap; color: var(--overschot); }
+
+.regel-kop { display: flex; align-items: center; gap: 4px; margin-bottom: 10px; }
+.regel-kop .pills { margin-left: 4px; }
+.regel-kop .pills { flex: 1; }
+.regel-kop .link { font-size: 1.2rem; min-width: 36px; display: inline-flex; align-items: center; justify-content: center; }
+/* zelfde plek en maat als het ▶ van de ingeklapte regel */
+.regel-kop [data-sluit-regel] { font-size: .7rem; min-width: 0; padding: 0 6px 0 0; align-self: stretch; justify-content: flex-start; }
+#regels .regel:only-child [data-verwijder-regel] { visibility: hidden; }
+
+/* categorie als pill-knoppen (radio verborgen) */
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill {
+  position: relative; flex-direction: row; margin: 0; padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--rand); background: var(--bg); color: var(--tekst); font-size: .9rem;
+}
+.pill input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.pill:has(input:checked) { font-weight: 600; border-color: transparent; }
+.pill.basis:has(input:checked) { background: var(--cat-basis-zacht); box-shadow: inset 0 0 0 2px var(--cat-basis); }
+.pill.iets_luxer:has(input:checked) { background: var(--cat-iets-zacht); box-shadow: inset 0 0 0 2px var(--cat-iets); }
+.pill.luxe:has(input:checked) { background: var(--cat-luxe-zacht); box-shadow: inset 0 0 0 2px var(--cat-luxe); }
+.pill:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* wijn + prijs op één rij */
+.wijn-velden { display: grid; grid-template-columns: 1fr 90px; gap: 8px; }
+.wijn-velden > label { margin-bottom: 4px; }
+
+/* verdeling: één rij per via — code, stepper, dan 'nog N', dicht bij elkaar */
+.verdeling { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.verdeel-cel { display: grid; grid-template-columns: 2.5rem auto 1fr; grid-template-areas: "via stepper nog"; align-items: center; gap: 10px; }
+.verdeel-kop { display: contents; }
+.verdeel-kop strong { grid-area: via; }
+.verdeel-kop .nog-info { grid-area: nog; }
+.verdeel-cel .stepper { grid-area: stepper; }
+.verdeel-cel input::-webkit-inner-spin-button, .verdeel-cel input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.verdeel-cel input[type=number] { -moz-appearance: textfield; }
+.teller { margin: 8px 0 6px; }
+
+/* actiebalk onderaan het aankoopformulier: blijft in beeld */
+.actiebalk {
+  position: sticky; bottom: 0; z-index: 5; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  margin: 8px -16px 0; padding: 10px 16px; background: var(--bg); border-top: 1px solid var(--rand);
+}
+.actiebalk #regel-toevoegen { margin-left: auto; }
+a.knop.secundair { background: var(--basis); color: var(--tekst); font-weight: 500; }
+
+/* icoonknoppen (bewerken / verwijderen) */
+.icoon-knop {
+  display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; min-height: 0;
+  padding: 0; border-radius: 8px; background: none; color: var(--accent);
+}
+.icoon-knop:hover { background: var(--basis); }
+.klant-kop form { margin: 0; }

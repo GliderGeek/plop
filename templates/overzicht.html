@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{# nog > 0: nog kopen (vet); 0: klaar (puntje); < 0: te veel gekocht (oranje) #}
+{% macro cel(nog) %}
+  {% if nog > 0 %}<td class="nog">{{ nog }}</td>
+  {% elif nog == 0 %}<td class="klaar">·</td>
+  {% else %}<td class="te-veel" title="{{ -nog }} te veel gekocht">{{ nog }}</td>{% endif %}
+{% endmacro %}
+
+{% block main %}
+<h1>Nog te kopen</h1>
+<div class="kaart tabel-kaart">
+  <div class="tabel-scroll">
+    <table class="overzicht">
+      <thead><tr>
+        <th>Via</th>
+        {% for x in ov.totaal_vast %}<th>{{ x.wijn.naam|kortnaam }}</th>{% endfor %}
+        {% for c in ZOEK_CATEGORIEEN %}<th>{{ CATEGORIEEN[c] }}</th>{% endfor %}
+      </tr></thead>
+      <tbody>
+        {% for r in ov.per_via %}
+        <tr>
+          <th>{{ r.via.code }}</th>
+          {% for x in r.vast %}{{ cel(x.nog) }}{% endfor %}
+          {% for c in ZOEK_CATEGORIEEN %}{{ cel(r.cats[c].nog) }}{% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

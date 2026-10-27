@@ -1,0 +1,32 @@
+{% macro klant_velden(vaste, k=None, via_code=None) %}
+  {% set kk = k.k if k else None %}
+  {% if kk %}<input type="hidden" name="versie" value="{{ kk.versie }}">{% endif %}
+  <div class="rij">
+    <label class="breed">Voor wie
+      <input name="naam" required value="{{ kk.naam if kk }}" autocomplete="off">
+    </label>
+    <label>Via
+      <select name="via">
+        {% for v in alle_vias %}
+          <option value="{{ v.code }}" {{ 'selected' if (kk and kk.via == v.code) or (not kk and v.code == via_code) }}>{{ v.code }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="rij aantallen">
+    {% for w in vaste %}
+      <label>{{ w.naam }}
+        <input type="number" min="0" inputmode="numeric" name="vast_{{ w.id }}" value="{{ k.vast.get(w.id, '') if k }}">
+      </label>
+    {% endfor %}
+    <label>Iets luxer
+      <input type="number" min="0" inputmode="numeric" name="iets_luxer_n" value="{{ kk.iets_luxer_n or '' if kk }}">
+    </label>
+    <label>Luxe
+      <input type="number" min="0" inputmode="numeric" name="luxe_n" value="{{ kk.luxe_n or '' if kk }}">
+    </label>
+  </div>
+  <label>Aantekening / wensen
+    <textarea name="aantekening" rows="2">{{ kk.aantekening if kk }}</textarea>
+  </label>
+{% endmacro %}

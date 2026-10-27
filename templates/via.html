@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% from "partials/fles.html" import fles %}
+{% block main %}
+<div id="via-body">
+<h1>Via {{ v.code }}</h1>
+<div class="kaart">
+  <div class="cijfers">
+    {% for c in ZOEK_CATEGORIEEN %}{% set t = ov.cats[c] %}
+    <div class="cijfer">
+      <span class="label">{{ CATEGORIEEN[c] }} nog</span>
+      <span class="groot {{ 'overschot' if t.nog < 0 else ('klaar' if t.nog == 0) }}">{{ t.nog }}</span>
+      <span class="klein-tekst">{{ t.gekocht }} / {{ t.nodig }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% set vast = ov.vast|selectattr('nodig')|list + ov.vast|rejectattr('nodig')|selectattr('gekocht')|list %}
+  {% if vast %}
+  <div class="vast-rij">
+    <span class="label">Basis nog</span>
+    {% for x in vast %}<span class="{{ 'overschot-tekst' if x.nog < 0 else ('klaar-tekst' if x.nog == 0) }}">{{ x.wijn.naam|kortnaam }} <strong>{{ x.nog }}</strong></span>{% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% set terug = url_for('via', code=v.code) %}
+{% set beschikbaar = pool|selectattr('vrij', 'gt', 0)|list %}
+{% set beschikbaar_los = beschikbaar|rejectattr('wijn.is_vast')|list %}
+{% macro aanvul_knop(k, x, n) %}
+<form {{ post_attrs() }}>
+  <input type="hidden" name="terug" value="{{ terug }}"><input type="hidden" name="klant_id" value="{{ k.k.id }}">
+  <input type="hidden" name="wine_id" value="{{ x.wijn.id }}"><input type="hidden" name="aanvullen" value="1">
+  <button class="toevoeg-knop {{ x.wijn.categorie }}" title="{{ n }} toekennen aan {{ k.k.naam }}">
+    + {{ fles(x.wijn.categorie, klein=True) }} {{ n }} × {{ x.wijn.naam }}
+  </button>
+</form>
+{% endmacro %}
+{% macro toevoeg_knop(k, p) %}
+<form {{ post_attrs() }}>
+  <input type="hidden" name="terug" value="{{ terug }}"><input type="hidden" name="klant_id" value="{{ k.k.id }}">
+  <input type="hidden" name="wine_id" value="{{ p.wijn.id }}"><input type="hidden" name="delta" value="1">
+  <button class="toevoeg-knop {{ p.wijn.categorie }}" title="1 fles toekennen aan {{ k.k.naam }}">
+    + {{ fles(p.wijn.categorie, klein=True) }} {{ p.wijn.naam }}
+  </button>
+</form>
+{% endmacro %}
+{% macro post_attrs() %}hx-post="{{ url_for('toekenning') }}" hx-target="#via-body" hx-select="#via-body" hx-swap="outerHTML"{% endmacro %}
+
+<h2>Pool <small>(gekocht door {{ v.code }})</small></h2>
+{% if not pool %}<p class="uitleg">Nog niets gekocht voor {{ v.code }}.</p>
+{% elif not beschikbaar %}<p class="uitleg">Alles is toegekend.</p>{% endif %}
+<div class="pool-grid">
+{% for p in beschikbaar %}
+<div class="pool-tegel">
+  <button type="button" class="menu-knop" popovertarget="ovd-{{ p.wijn.id }}" aria-label="Meer acties">⋯</button>
+  {{ fles(p.wijn.categorie, p.vrij) }}
+  <span class="tegel-naam">{{ p.wijn.naam }}</span>
+  <span class="klein-tekst">{{ CATEGORIEEN[p.wijn.categorie] }}</span>
+  <div popover id="ovd-{{ p.wijn.id }}" class="popup">
+    <h3>{{ p.wijn.naam }} overdragen</h3>
+    <form hx-post="{{ url_for('overdracht') }}" hx-target="#via-body" hx-select="#via-body" hx-swap="outerHTML">
+      <input type="hidden" name="terug" value="{{ terug }}">
+      <input type="hidden" name="wine_id" value="{{ p.wijn.id }}">
+      <input type="hidden" name="van_via" value="{{ v.code }}">
+      <div class="rij">
+        <label>Aantal <small>(max {{ p.vrij }})</small>
+          <input type="number" name="aantal" min="1" max="{{ p.vrij }}" value="1" inputmode="numeric">
+        </label>
+        <label>Naar via
+          <select name="naar_via">{% for o in alle_vias if o.code != v.code %}<option>{{ o.code }}</option>{% endfor %}</select>
+        </label>
+      </div>
+      <div class="knoppen">
+        <button type="submit">Overdragen</button>
+        <button type="button" class="secundair" popovertarget="ovd-{{ p.wijn.id }}" popovertargetaction="hide">Annuleer</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+</div>
+
+<h2>Klanten</h2>
+{% for k in klanten %}
+{% set vast_open = k.vast_status|selectattr('open', 'gt', 0)|list %}
+{% set luxer_open = k.open.values()|select('gt', 0)|first %}
+<div class="kaart klant" id="klant-{{ k.k.id }}">
+  <div class="klant-kop">
+    <strong>{{ k.k.naam }}</strong>
+    {% for x in k.vast_status %}
+      <span class="chip basis {{ 'teveel' if x.open < 0 else ('klaar' if x.open == 0) }}">{{ x.wijn.naam|kortnaam }} {% if x.open == 0 %}✓{% else %}{{ x.heeft }}/{{ x.nodig }}{% endif %}</span>
+    {% endfor %}
+    {% for c in ZOEK_CATEGORIEEN %}{% if k.nodig[c] or k.heeft[c] %}
+      <span class="chip {{ c }} {{ 'teveel' if k.open[c] < 0 else ('klaar' if k.open[c] == 0) }}">{{ CATEGORIEEN[c] }} {% if k.open[c] == 0 %}✓{% else %}{{ k.heeft[c] }}/{{ k.nodig[c] }}{% endif %}</span>
+    {% endif %}{% endfor %}
+  </div>
+  {% if k.k.aantekening %}<div class="wens">{{ k.k.aantekening }}</div>{% endif %}
+
+  {% for t in k.toekenningen %}
+  <div class="toekenning">
+    <span class="toekenning-naam">{{ fles(t.categorie, klein=True) }} <span><strong>{{ t.aantal }} ×</strong> {{ t.naam }}</span></span>
+    <div class="stepper">
+      <form {{ post_attrs() }}>
+        <input type="hidden" name="terug" value="{{ terug }}"><input type="hidden" name="klant_id" value="{{ k.k.id }}">
+        <input type="hidden" name="wine_id" value="{{ t.wine_id }}"><input type="hidden" name="delta" value="-1">
+        <button class="secundair">−</button>
+      </form>
+      <span class="aantal">{{ t.aantal }}</span>
+      <form {{ post_attrs() }}>
+        <input type="hidden" name="terug" value="{{ terug }}"><input type="hidden" name="klant_id" value="{{ k.k.id }}">
+        <input type="hidden" name="wine_id" value="{{ t.wine_id }}"><input type="hidden" name="delta" value="1">
+        <button class="secundair">+</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+
+  {% for x in vast_open %}
+  <div class="nog-open">
+    <span class="spook-rij">{% for _ in range([x.open, 6]|min) %}{{ fles(x.wijn.categorie, klein=True, spook=True) }}{% endfor %}{% if x.open > 6 %}…{% endif %}</span>
+    <span>nog {{ x.open }} {{ x.wijn.naam }}</span>
+  </div>
+  {% endfor %}
+  {% for c in ZOEK_CATEGORIEEN if k.open[c] > 0 %}
+  <div class="nog-open">
+    <span class="spook-rij">{% for _ in range([k.open[c], 6]|min) %}{{ fles(c, klein=True, spook=True) }}{% endfor %}{% if k.open[c] > 6 %}…{% endif %}</span>
+    <span>nog {{ k.open[c] }} {{ CATEGORIEEN[c] }}</span>
+  </div>
+  {% endfor %}
+
+  {% set nodig = beschikbaar_los|selectattr('wijn.categorie', 'in', k.open|dictsort|selectattr(1, 'gt', 0)|map(attribute=0)|list)|list %}
+  {% set rest = beschikbaar_los|reject('in', nodig)|list %}
+  <div class="toevoeg-knoppen">
+    {% for x in vast_open %}{% set p = beschikbaar|selectattr('wijn.id', 'equalto', x.wijn.id)|first %}
+      {% if p %}{{ aanvul_knop(k, x, [x.open, p.vrij]|min) }}{% endif %}
+    {% endfor %}
+    {% for p in nodig %}{{ toevoeg_knop(k, p) }}{% endfor %}
+  </div>
+  {% if rest and luxer_open %}
+  <details class="meer">
+    <summary>andere wijnen…</summary>
+    <div class="toevoeg-knoppen">{% for p in rest %}{{ toevoeg_knop(k, p) }}{% endfor %}</div>
+  </details>
+  {% endif %}
+</div>
+{% else %}
+<p class="uitleg">Nog geen klanten voor {{ v.code }}.</p>
+{% endfor %}
+</div>
+{% endblock %}
