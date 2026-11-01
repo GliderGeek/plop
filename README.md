@@ -18,6 +18,11 @@ Basisflessen lopen via hetzelfde patroon als de rest: ze worden gekocht op een b
 
 Er zijn geen rollen of logins: iedereen kan alles.
 
+## TODO
+
+- site op domeinnaam + https
+- kosten verrekenen erin zetten
+
 ## Techniek
 
 - Python + Flask + Jinja2-templates
