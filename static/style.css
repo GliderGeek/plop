@@ -1,15 +1,17 @@
 :root {
-  --bg: #f6f3ec;
+  --bg: #f3e7aa;
   --kaart: #fff;
   --tekst: #2a2522;
   --zacht: #7a716a;
   --rand: #e4ddd0;
-  --accent: #8a6d1f;
+  --accent: #2c6f53;
   --accent-tekst: #fff;
   --ok: #2f7d4a;
   --overschot: #b4561c;
   --fout: #b3261e;
   --basis: #efe7d2;
+  --veld: #fdfaf0;
+  --veld-rand: #d8cda8;
   /* categoriekleuren: fles + lichte tint voor badges/knoppen */
   --cat-basis: #4f8a3c;
   --cat-basis-zacht: #e3eedc;
@@ -33,6 +35,8 @@
     --overschot: #e89a5e;
     --fout: #f08a80;
     --basis: #3a3324;
+    --veld: #1b1916;
+    --veld-rand: #4a443b;
     --cat-basis: #6aa957;
     --cat-basis-zacht: #2c3a27;
     --cat-iets: #5b8cc0;
@@ -59,7 +63,7 @@ a { color: var(--accent); }
   flex: none; padding: 8px 10px; border-radius: 8px;
   text-decoration: none; color: var(--tekst); white-space: nowrap; font-weight: 600;
 }
-.nav a.actief { background: var(--basis); }
+.nav a.actief { background: var(--bg); }
 .nav a.via-link { min-width: 40px; text-align: center; }
 
 /* meldingen */
@@ -111,8 +115,8 @@ label { display: flex; flex-direction: column; font-size: .85rem; color: var(--z
 input, select, textarea, button { font: inherit; font-size: 16px; }
 input:not([type=radio]), select { height: 44px; }
 input, select, textarea {
-  width: 100%; padding: 8px 10px; border: 1px solid var(--rand); border-radius: 8px;
-  background: var(--bg); color: var(--tekst);
+  width: 100%; padding: 8px 10px; border: 1px solid var(--veld-rand); border-radius: 8px;
+  background: var(--veld); color: var(--tekst);
 }
 .rij { display: flex; gap: 8px; flex-wrap: wrap; }
 .rij > label { flex: 1 1 100px; justify-content: space-between; }  /* veld onderaan, ook als label wrapt */
@@ -123,7 +127,7 @@ button {
   padding: 8px 16px; border: 0; border-radius: 8px; cursor: pointer;
   background: var(--accent); color: var(--accent-tekst); font-weight: 600; min-height: 40px;
 }
-button.secundair { background: var(--basis); color: var(--tekst); }
+button.secundair, a.knop.secundair { background: var(--kaart); color: var(--accent); border: 1px solid var(--accent); }
 button.gevaar { background: var(--fout); color: #fff; }
 button.link { background: none; color: var(--accent); padding: 4px; min-height: 0; font-weight: normal; }
 .gevaar-tekst { color: var(--fout) !important; }
@@ -139,7 +143,8 @@ input.smal { width: 80px; flex: none; }
 .verdeling { display: flex; flex-direction: column; gap: 6px; }
 .stepper { display: flex; align-items: center; gap: 4px; }
 .stepper form { margin: 0; }
-.stepper button { width: 44px; padding: 0; }
+.stepper button { width: 44px; min-height: 44px; padding: 0; }
+.stepper button.secundair { background: color-mix(in srgb, var(--accent) 12%, var(--kaart)); border: 0; }
 .stepper input { width: 64px; text-align: center; }
 .stepper .aantal { min-width: 28px; text-align: center; font-weight: 700; }
 .teller { font-weight: 600; }
@@ -217,8 +222,9 @@ details.meer > summary { font-size: .85rem; padding: 8px 0 0; }
 label.wijnhuis { font-size: 1rem; font-weight: 600; color: var(--tekst); }
 label.wijnhuis input {
   font-size: 1.3rem; font-weight: 700; height: 48px; padding: 4px 0; background: transparent;
-  border: 0; border-bottom: 2px solid var(--rand); border-radius: 0;
+  border: 0; border-bottom: 2px solid var(--zacht); border-radius: 0;
 }
+label.wijnhuis input::placeholder { color: var(--tekst); opacity: .55; }
 label.wijnhuis input:focus { outline: none; border-bottom-color: var(--accent); }
 .regels-kop { margin: 18px 0 8px; font-size: .85rem; font-weight: 600; color: var(--zacht); text-transform: uppercase; letter-spacing: .05em; }
 .bon-regel { padding: 6px 0; border-top: 1px solid var(--rand); margin-top: 6px; }
@@ -273,7 +279,7 @@ table.overzicht { border-collapse: collapse; width: 100%; font-size: .95rem; }
 .pills { display: flex; flex-wrap: wrap; gap: 6px; }
 .pill {
   position: relative; flex-direction: row; margin: 0; padding: 6px 14px; border-radius: 999px; cursor: pointer;
-  border: 1px solid var(--rand); background: var(--bg); color: var(--tekst); font-size: .9rem;
+  border: 1px solid var(--veld-rand); background: var(--kaart); color: var(--tekst); font-size: .9rem;
 }
 .pill input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
 .pill:has(input:checked) { font-weight: 600; border-color: transparent; }
@@ -303,7 +309,7 @@ table.overzicht { border-collapse: collapse; width: 100%; font-size: .95rem; }
   margin: 8px -16px 0; padding: 10px 16px; background: var(--bg); border-top: 1px solid var(--rand);
 }
 .actiebalk #regel-toevoegen { margin-left: auto; }
-a.knop.secundair { background: var(--basis); color: var(--tekst); font-weight: 500; }
+a.knop.secundair { font-weight: 500; }
 
 /* icoonknoppen (bewerken / verwijderen) */
 .icoon-knop {
