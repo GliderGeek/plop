@@ -8,29 +8,9 @@
 {% endmacro %}
 
 {% block main %}
-<h1>Nog te kopen</h1>
-<div class="kaart tabel-kaart">
-  <div class="tabel-scroll">
-    <table class="overzicht">
-      <thead><tr>
-        <th>Via</th>
-        {% for x in ov.totaal_vast %}<th>{{ x.wijn.naam|kortnaam }}</th>{% endfor %}
-        {% for c in ZOEK_CATEGORIEEN %}<th>{{ CATEGORIEEN[c] }}</th>{% endfor %}
-      </tr></thead>
-      <tbody>
-        {% for r in ov.per_via %}
-        <tr>
-          <th>{{ r.via.code }}</th>
-          {% for x in r.vast %}{{ cel(x.nog) }}{% endfor %}
-          {% for c in ZOEK_CATEGORIEEN %}{{ cel(r.cats[c].nog) }}{% endfor %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<h1>Besteld</h1>
+{# inklapbaar per fase: bestellen, kopen, verrekenen; de stand onthoudt app.js per browser #}
+<details class="sectie" data-sectie="besteld" open>
+<summary><h1>Besteld</h1></summary>
 <div class="kaart tabel-kaart">
   <div class="tabel-scroll">
     <table class="overzicht">
@@ -61,6 +41,37 @@
     </table>
   </div>
 </div>
+</details>
+
+<details class="sectie" data-sectie="nog-te-kopen" open>
+<summary><h1>Nog te kopen</h1>{% if ov.nog_kopen %}<span class="chip waarschuwing">{{ ov.nog_kopen }} nog te kopen</span>{% endif %}{% if ov.te_veel %}<span class="chip waarschuwing">{{ ov.te_veel }} teveel gekocht</span>{% endif %}</summary>
+<div class="kaart tabel-kaart">
+  <div class="tabel-scroll">
+    <table class="overzicht">
+      <thead><tr>
+        <th>Via</th>
+        {% for x in ov.totaal_vast %}<th>{{ x.wijn.naam|kortnaam }}</th>{% endfor %}
+        {% for c in ZOEK_CATEGORIEEN %}<th>{{ CATEGORIEEN[c] }}</th>{% endfor %}
+      </tr></thead>
+      <tbody>
+        {% for r in ov.per_via %}
+        <tr>
+          <th>{{ r.via.code }}</th>
+          {% for x in r.vast %}{{ cel(x.nog) }}{% endfor %}
+          {% for c in ZOEK_CATEGORIEEN %}{{ cel(r.cats[c].nog) }}{% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+</details>
+
+<details class="sectie" id="verrekening" data-sectie="verrekening" open>
+<summary><h1>Verrekening</h1>{% if vr.waarschuwingen %}{% set n = vr.waarschuwingen|length %}<span class="chip waarschuwing">{{ n }} open {{ 'punt' if n == 1 else 'punten' }}</span>{% endif %}</summary>
+{% include "partials/verrekening.html" %}
+</details>
+
 <div class="knoppen">
   <a class="knop secundair" href="{{ url_for('backup') }}" hx-boost="false">Backup</a>
 </div>

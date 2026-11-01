@@ -3,24 +3,30 @@
 {% block main %}
 <div class="kop-met-knop">
   <h1>Aankopen</h1>
-  <a class="knop" href="{{ url_for('aankoop_nieuw') }}">+ Nieuwe aankoop</a>
+  <div class="knoppen">
+    <button type="button" class="secundair" popovertarget="nieuwe-kosten">+ Overige aankoop</button>
+    <a class="knop" href="{{ url_for('aankoop_nieuw') }}">+ Champagne aankoop</a>
+  </div>
 </div>
 {% for b in aankopen %}
 <div class="kaart">
   <div class="klant-kop">
     <strong>{{ b.a.omschrijving or 'Aankoop' }}</strong>
     <span class="totaal-badge">{{ b.totaal }} fl.</span>
+    {% if b.cent %}<span class="klein-tekst">{{ b.cent|cent }}</span>{% endif %}
+    {% if b.a.betaald_door %}<span class="klein-tekst">betaald door {{ b.a.betaald_door }}</span>{% endif %}
     <a class="icoon-knop" href="{{ url_for('aankoop_bewerk', aankoop_id=b.a.id) }}" title="Bewerken" aria-label="Bewerken">{{ icoon('pen') }}</a>
     <form method="post" action="{{ url_for('aankoop_verwijder', aankoop_id=b.a.id) }}" hx-confirm="Aankoop {{ b.a.omschrijving }} verwijderen?">
       <button class="icoon-knop gevaar-tekst" title="Verwijderen" aria-label="Verwijderen">{{ icoon('prullenbak') }}</button>
     </form>
   </div>
+  {% if b.ontbreekt %}<div class="chips">{% for t in b.ontbreekt %}<span class="chip waarschuwing">{{ t }}</span>{% endfor %}</div>{% endif %}
   {% for x in b.regels %}{% set r = x.r %}
   <div class="bon-regel">
     <div class="klant-kop">
       <span>{{ r.aantal }} × {{ r.naam }}</span>
       <span class="chip {{ r.categorie }}">{{ CATEGORIEEN[r.categorie] }}</span>
-      {% if r.prijs is not none %}<span class="klein-tekst">{{ r.prijs|euro }}</span>{% endif %}
+      {% if r.prijs is not none %}<span class="klein-tekst">{{ r.prijs|euro }} p/fl.</span>{% endif %}
     </div>
     <div class="chips">{% for via, n in x.verdeling.items() %}<span class="chip">{{ via }}: {{ n }}</span>{% endfor %}</div>
   </div>
@@ -29,4 +35,6 @@
 {% else %}
 <p class="uitleg">Nog geen aankopen.</p>
 {% endfor %}
+
+{% include "partials/vaste_kosten.html" %}
 {% endblock %}

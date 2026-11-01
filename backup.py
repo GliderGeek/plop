@@ -27,7 +27,7 @@ def _tabblad(wb, titel, kop, rijen):
 
 
 def werkboek(conn, tijdstip):
-    """Het werkboek als bytes: bestellingen, toekenningen en aankopen op moment `tijdstip`."""
+    """Het werkboek als bytes: bestellingen, toekenningen, aankopen, kosten en verrekening op moment `tijdstip`."""
     vaste = logic.wijnen(conn, vast=True)
     vias = [v["code"] for v in logic.vias(conn)]
     klanten = logic.klanten(conn)
@@ -43,11 +43,17 @@ def werkboek(conn, tijdstip):
              ([k["k"]["via"], k["k"]["naam"], t["naam"], CATEGORIEEN[t["categorie"]], t["aantal"]]
               for k in klanten for t in k["toekenningen"]))
     _tabblad(wb, "Aankopen",
-             ["Bon", "Omschrijving", "Datum", "Wijn", "Categorie", "Aantal", "Prijs", *vias],
-             ([b["a"]["id"], b["a"]["omschrijving"], b["a"]["aangemaakt_op"], x["r"]["naam"],
+             ["Bon", "Omschrijving", "Datum", "Betaald door", "Wijn", "Categorie", "Aantal", "Prijs", *vias],
+             ([b["a"]["id"], b["a"]["omschrijving"], b["a"]["aangemaakt_op"], b["a"]["betaald_door"], x["r"]["naam"],
                CATEGORIEEN[x["r"]["categorie"]], x["r"]["aantal"], x["r"]["prijs"],
                *(x["verdeling"].get(via, 0) for via in vias)]
               for b in logic.aankopen(conn) for x in b["regels"]))
+    vr = logic.verrekening(conn)
+    _tabblad(wb, "Kosten", ["Omschrijving", "Bedrag", "Betaald door", "Verdeling"],
+             ([p["k"]["omschrijving"], p["k"]["bedrag"], p["k"]["betaald_door"], logic.KOSTEN_VERDELINGEN[p["k"]["verdeling"]]] for p in vr["kosten"]))
+    _tabblad(wb, "Verrekening", ["Via", "Champagne", "Reiskosten", "Eigen kosten", "Te betalen", "Betaald", "Saldo"],
+             ([r["via"]["code"], *(r[s] / 100 for s in ("wijn", "kosten", "eigen", "te_betalen", "betaald", "saldo"))]
+              for r in vr["per_via"]))
     _tabblad(wb, "Snapshot", ["Gemaakt op"], [[tijdstip.strftime("%Y-%m-%d %H:%M:%S")]])
 
     uit = BytesIO()

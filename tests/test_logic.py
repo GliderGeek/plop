@@ -354,3 +354,137 @@ def test_gelijktijdige_schrijvers_wachten_op_elkaar(tmp_path):
     t.join()
     assert fouten == []
     assert logic.klant(a, k)["toekenningen"][0]["aantal"] == 2
+
+
+# --- verrekening -------------------------------------------------------------
+
+def stand(vr, via):
+    return next(r for r in vr["per_via"] if r["via"]["code"] == via)
+
+
+def sluit(vr):
+    return sum(r["saldo"] for r in vr["per_via"]) + vr["onbekende_betaler"] - vr["onverdeeld"]
+
+
+def test_verdeel_telt_exact_op():
+    assert logic._verdeel(100, {"a": 1, "b": 1, "c": 1}) == {"a": 34, "b": 33, "c": 33}
+    assert logic._verdeel(100, {"a": 0, "b": 0}) == {"a": 0, "b": 0}
+    assert sum(logic._verdeel(9999, {"a": 0.1, "b": 0.2, "c": 0.7}).values()) == 9999
+
+
+def test_regelbedrag_is_prijs_per_fles_verdeeld_over_vias(conn):
+    logic.aankoop_opslaan(conn, None, "T", [regel("Krug", {"dd": 3, "j": 1}, "luxe", "10,50")], betaald_door="dd")
+    vr = logic.verrekening(conn)
+    assert (stand(vr, "dd")["wijn"], stand(vr, "j")["wijn"]) == (3150, 1050)
+    assert stand(vr, "dd")["saldo"] == 1050 and stand(vr, "j")["saldo"] == -1050
+    assert not vr["waarschuwingen"] and sluit(vr) == 0
+
+
+def test_vaste_kosten_naar_rato_van_de_wijn(conn):
+    logic.aankoop_opslaan(conn, None, "T", [regel("Krug", {"dd": 3, "j": 1}, "luxe", "10")], betaald_door="j")
+    logic.kosten_opslaan(conn, None, "Tank", "100", "h")
+    vr = logic.verrekening(conn)
+    assert (stand(vr, "dd")["kosten"], stand(vr, "j")["kosten"], stand(vr, "h")["kosten"]) == (7500, 2500, 0)
+    assert stand(vr, "h")["saldo"] == 10000
+    assert stand(vr, "j")["saldo"] == 4000 - 1000 - 2500
+    assert sluit(vr) == 0
+
+
+def test_ontbrekende_gegevens_geven_waarschuwingen(conn):
+    bon = logic.aankoop_opslaan(conn, None, "T", [regel("Krug", {"dd": 2}, "luxe", "10"), regel("Ruinart", {"dd": 1}, "luxe")])
+    tank = logic.kosten_opslaan(conn, None, "Tank", "", "j")
+    hotel = conn.execute("INSERT INTO kosten (omschrijving, bedrag) VALUES ('Hotel', 50)").lastrowid  # oude post zonder betaler
+    vr = logic.verrekening(conn)
+    assert [w["tekst"] for w in vr["waarschuwingen"]] == [
+        "T: betaler ontbreekt, 1 zonder prijs", "Tank: bedrag ontbreekt", "Hotel: betaler ontbreekt"]
+    assert vr["waarschuwingen"][0]["aankoop_id"] == bon and vr["waarschuwingen"][1]["kosten_id"] == tank
+    assert vr["onbekende_betaler"] == 2000 + 5000 and sluit(vr) == 0
+
+    logic.aankoop_opslaan(conn, bon, "T", [regel("Krug", {"dd": 2}, "luxe", "10"), regel("Ruinart", {"dd": 1}, "luxe", "20")],
+                          betaald_door="dd")
+    logic.kosten_opslaan(conn, tank, "Tank", "30", "j")
+    logic.kosten_opslaan(conn, hotel, "Hotel", "50", "j")
+    vr = logic.verrekening(conn)
+    assert not vr["waarschuwingen"] and vr["onbekende_betaler"] == 0 and sluit(vr) == 0
+
+
+def test_vaste_kosten_zonder_wijn_met_prijs_blijven_onverdeeld(conn):
+    logic.aankoop_opslaan(conn, None, "T", [regel("Krug", {"dd": 2}, "luxe")], betaald_door="dd")
+    logic.kosten_opslaan(conn, None, "Tank", "40", "j")
+    vr = logic.verrekening(conn)
+    assert vr["onverdeeld"] == 4000 and stand(vr, "j")["saldo"] == 4000 and sluit(vr) == 0
+
+
+def test_overdracht_verschuift_de_kosten(conn):
+    logic.aankoop_opslaan(conn, None, "T", [regel("Krug", {"dd": 4}, "luxe", "10")], betaald_door="dd")
+    logic.overdragen(conn, wijn_id(conn, "Krug"), "dd", "j", 1)
+    vr = logic.verrekening(conn)
+    assert (stand(vr, "dd")["wijn"], stand(vr, "j")["wijn"]) == (3000, 1000)
+
+
+def test_betaler_blijft_na_overdracht_en_moet_bestaan(conn):
+    bon = logic.aankoop_opslaan(conn, None, "T", [regel("Krug", {"dd": 4}, "luxe", "10")], betaald_door="j")
+    logic.overdragen(conn, wijn_id(conn, "Krug"), "dd", "h", 1)
+    assert logic.aankopen(conn, bon)[0]["a"]["betaald_door"] == "j"
+    with pytest.raises(ValidatieFout):
+        logic.aankoop_opslaan(conn, None, "T", [regel("Krug", {"dd": 1}, "luxe")], betaald_door="zz")
+    with pytest.raises(ValidatieFout):
+        logic.kosten_opslaan(conn, None, "Tank", "1", "zz")
+    with pytest.raises(ValidatieFout):
+        logic.kosten_opslaan(conn, None, "Tank", "1", "")
+
+
+def test_klantbedragen_tellen_op_tot_via_totaal(conn):
+    piet = logic.klant_opslaan(conn, None, "dd", "Piet", "", 0, 1, {})
+    jan = logic.klant_opslaan(conn, None, "dd", "Jan", "", 0, 3, {})
+    logic.aankoop_opslaan(conn, None, "A", [regel("Krug", {"dd": 2, "j": 1}, "luxe", "10")], betaald_door="dd")
+    logic.aankoop_opslaan(conn, None, "B", [regel("Krug", {"dd": 2}, "luxe", "20,01")], betaald_door="dd")
+    logic.kosten_opslaan(conn, None, "Tank", "33,33", "j")
+    krug = wijn_id(conn, "Krug")
+    logic.toekenning_wijzig(conn, piet, krug, 1)
+    logic.toekenning_wijzig(conn, jan, krug, 2)
+
+    b = logic.klant_bedragen(conn, "dd")
+    rij = {r["k"]["naam"]: r for r in b["rijen"]}
+    assert abs(rij["Jan"]["wijn"] - 2 * rij["Piet"]["wijn"]) <= 2  # gemiddelde prijs, op afronding na
+    assert (rij["Piet"]["open"], rij["Jan"]["open"]) == (0, 1)
+    assert b["vrij"]["flessen"] == 1
+    for veld, totaal in (("wijn", "wijn"), ("kosten", "kosten"), ("totaal", "doorberekend")):
+        assert sum(r[veld] for r in b["rijen"]) + b["vrij"][veld] == b["stand"][totaal]
+
+
+def test_klant_met_wijn_zonder_prijs_is_gemarkeerd(conn):
+    piet = logic.klant_opslaan(conn, None, "dd", "Piet", "", 0, 1, {})
+    logic.aankoop_opslaan(conn, None, "A", [regel("Krug", {"dd": 1}, "luxe")])
+    logic.toekenning_wijzig(conn, piet, wijn_id(conn, "Krug"), 1)
+    b = logic.klant_bedragen(conn, "dd")
+    assert b["rijen"][0]["geen_prijs"] and b["zonder_prijs"] == 1 and b["rijen"][0]["totaal"] == 0
+
+
+@pytest.mark.parametrize("waarde", ["nan", "inf", "-1", "abc"])
+def test_ongeldige_bedragen_geweigerd(conn, waarde):
+    with pytest.raises(ValidatieFout):
+        logic.kosten_opslaan(conn, None, "Tank", waarde, "j")
+    with pytest.raises(ValidatieFout):
+        logic.aankoop_opslaan(conn, None, "T", [regel("Krug", {"dd": 1}, "luxe", waarde)])
+
+
+def test_kosten_alleen_over_de_vias_gelijk_en_niet_doorberekend(conn):
+    logic.klant_opslaan(conn, None, "hm", "Piet", "", 0, 1, {})
+    logic.aankoop_opslaan(conn, None, "T", [regel("Krug", {"hm": 1}, "luxe", "10")], betaald_door="hm")
+    logic.kosten_opslaan(conn, None, "Hotel", "100,01", "dd", verdeling="personen")
+    vr = logic.verrekening(conn)
+    assert [stand(vr, v)["eigen"] for v in ("dd", "j", "h", "m", "hm")] == [2501, 2500, 2500, 2500, 0]
+    assert stand(vr, "dd")["saldo"] == 10001 - 2501 and stand(vr, "j")["saldo"] == -2500
+    assert stand(vr, "hm")["saldo"] == 0 and sluit(vr) == 0
+    assert logic.klant_bedragen(conn, "hm")["vrij"]["totaal"] == 1000
+
+    logic.kosten_opslaan(conn, None, "Tank", "50", "j", verdeling="personen")
+    logic.kosten_opslaan(conn, None, "Diesel", "20", "j")
+    b = logic.klant_bedragen(conn, "hm")
+    assert b["vrij"]["kosten"] == 2000  # alleen Diesel; hm heeft alle wijn
+
+
+def test_onbekende_kostenverdeling_geweigerd(conn):
+    with pytest.raises(ValidatieFout):
+        logic.kosten_opslaan(conn, None, "Hotel", "1", "dd", verdeling="iedereen")

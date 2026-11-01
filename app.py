@@ -10,7 +10,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import backup as backup_module
 import db
 import logic
-from logic import CATEGORIEEN, ZOEK_CATEGORIEEN, ValidatieFout
+from logic import CATEGORIEEN, KOSTEN_VERDELINGEN, ZOEK_CATEGORIEEN, ValidatieFout
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
@@ -43,6 +43,7 @@ def is_htmx():
 def globals_():
     return {
         "CATEGORIEEN": CATEGORIEEN,
+        "KOSTEN_VERDELINGEN": KOSTEN_VERDELINGEN,
         "ZOEK_CATEGORIEEN": ZOEK_CATEGORIEEN,
         "alle_vias": logic.vias(get_conn()),
     }
@@ -51,6 +52,12 @@ def globals_():
 @app.template_filter("euro")
 def euro(v):
     return "" if v is None else ("€ %.2f" % v).replace(".", ",")
+
+
+@app.template_filter("cent")
+def cent(v):
+    """1250 → '€ 12,50'."""
+    return euro(v / 100)
 
 
 @app.template_filter("getal")
@@ -92,7 +99,8 @@ def terug(default):
 def overzicht():
     conn = get_conn()
     return render_template("overzicht.html", ov=logic.overzicht(conn),
-                           totalen=logic.bestel_totalen(conn))
+                           totalen=logic.bestel_totalen(conn),
+                           vr=logic.verrekening(conn))
 
 
 @app.get("/backup")
@@ -180,7 +188,7 @@ def aankoop_opslaan(aankoop_id=None):
     conn = get_conn()
     regels = regels_uit_form(request.form, logic.vias(conn))
     logic.aankoop_opslaan(conn, aankoop_id, request.form.get("omschrijving"), regels,
-                          request.form.get("versie"))
+                          request.form.get("versie"), request.form.get("betaald_door"))
     flash("Aankoop opgeslagen.", "ok")
     return redirect(url_for("aankopen"), code=303)
 
@@ -194,7 +202,7 @@ def aankoop_verwijder(aankoop_id):
 @app.get("/aankopen")
 def aankopen():
     conn = get_conn()
-    return render_template("aankopen.html", aankopen=logic.aankopen(conn))
+    return render_template("aankopen.html", aankopen=logic.aankopen(conn), kosten=logic.kosten(conn))
 
 
 # --- via ---------------------------------------------------------------------
@@ -207,7 +215,8 @@ def via(code):
         return redirect(url_for("overzicht"))
     ov = next(r for r in logic.overzicht(conn)["per_via"] if r["via"]["code"] == code)
     return render_template("via.html", v=v, ov=ov, pool=logic.pool(conn, code),
-                           klanten=logic.klanten(conn, code), vaste=logic.wijnen(conn, vast=True))
+                           klanten=logic.klanten(conn, code), vaste=logic.wijnen(conn, vast=True),
+                           bedragen=logic.klant_bedragen(conn, code))
 
 
 @app.post("/toekenning")
@@ -226,3 +235,20 @@ def overdracht():
     logic.overdragen(get_conn(), f.get("wine_id"), f.get("van_via"), f.get("naar_via"),
                      f.get("aantal"))
     return terug(url_for("overzicht"))
+
+
+# --- overige aankopen -------------------------------------------------------------
+
+@app.post("/kosten")
+@app.post("/kosten/<int:kosten_id>")
+def kosten_opslaan(kosten_id=None):
+    f = request.form
+    logic.kosten_opslaan(get_conn(), kosten_id, f.get("omschrijving"), f.get("bedrag"),
+                         f.get("betaald_door"), f.get("versie"), f.get("verdeling"))
+    return redirect(url_for("aankopen", _anchor="vaste-kosten"), code=303)
+
+
+@app.post("/kosten/<int:kosten_id>/verwijder")
+def kosten_verwijder(kosten_id):
+    logic.kosten_verwijderen(get_conn(), kosten_id)
+    return redirect(url_for("aankopen", _anchor="vaste-kosten"), code=303)

@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS aankoop (
     id INTEGER PRIMARY KEY,
     omschrijving TEXT NOT NULL DEFAULT '',
     aangemaakt_op TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    versie INTEGER NOT NULL DEFAULT 0  -- tegen het overschrijven van andermans wijziging
+    versie INTEGER NOT NULL DEFAULT 0,  -- tegen het overschrijven van andermans wijziging
+    betaald_door TEXT REFERENCES via(code)  -- NULL: nog onbekend
 );
 
 CREATE TABLE IF NOT EXISTS aankoop_regel (
@@ -50,7 +51,7 @@ CREATE TABLE IF NOT EXISTS aankoop_regel (
     aankoop_id INTEGER NOT NULL REFERENCES aankoop(id) ON DELETE CASCADE,
     wine_id INTEGER NOT NULL REFERENCES wine(id),
     aantal INTEGER NOT NULL CHECK (aantal > 0),
-    prijs REAL
+    prijs REAL  -- per fles
 );
 
 -- hoeveel flessen van een regel bij welke via horen; overdragen past dit aan
@@ -67,4 +68,16 @@ CREATE TABLE IF NOT EXISTS toekenning (
     wine_id INTEGER NOT NULL REFERENCES wine(id),
     aantal INTEGER NOT NULL CHECK (aantal > 0),
     PRIMARY KEY (klant_id, wine_id)
+);
+
+-- overige aankopen (tank, overnachting); het bedrag mag later ingevuld worden
+CREATE TABLE IF NOT EXISTS kosten (
+    id INTEGER PRIMARY KEY,
+    omschrijving TEXT NOT NULL,
+    bedrag REAL,
+    betaald_door TEXT REFERENCES via(code),
+    -- bestellers: naar rato van de wijn, doorberekend aan de bestellingen; personen: gelijk over de vier
+    verdeling TEXT NOT NULL DEFAULT 'bestellers' CHECK (verdeling IN ('bestellers', 'personen')),
+    aangemaakt_op TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    versie INTEGER NOT NULL DEFAULT 0  -- tegen het overschrijven van andermans wijziging
 );

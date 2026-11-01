@@ -1,5 +1,6 @@
 """Berekeningen en mutaties. Alles wat getallen afleidt of invoer valideert zit hier."""
 
+import math
 from collections import defaultdict
 
 from db import tx
@@ -10,6 +11,11 @@ CATEGORIEEN = {
     "luxe": "Luxe",
 }
 ZOEK_CATEGORIEEN = ["iets_luxer", "luxe"]  # tijdens de trip te kopen
+PERSONEN = ["dd", "j", "h", "m"]  # hm is de gezamenlijke bestelling van h en m, geen persoon
+KOSTEN_VERDELINGEN = {
+    "bestellers": "Alle bestellers",
+    "personen": "Alleen de via's",
+}
 
 
 class ValidatieFout(Exception):
@@ -107,11 +113,15 @@ def overzicht(conn):
                   for w in vaste]}
         for v in vias(conn)
     ]
+    totaal = {c: _samen(r["cats"][c] for r in per_via) for c in ZOEK_CATEGORIEEN}
+    totaal_vast = [{"wijn": w, **_samen(r["vast"][i] for r in per_via)} for i, w in enumerate(vaste)]
+    samen = [*totaal.values(), *totaal_vast]
     return {
         "per_via": per_via,
-        "totaal": {c: _samen(r["cats"][c] for r in per_via) for c in ZOEK_CATEGORIEEN},
-        "totaal_vast": [{"wijn": w, **_samen(r["vast"][i] for r in per_via)}
-                        for i, w in enumerate(vaste)],
+        "totaal": totaal,
+        "totaal_vast": totaal_vast,
+        "nog_kopen": sum(s["nog"] for s in samen),
+        "te_veel": sum(s["overschot"] for s in samen),
     }
 
 
@@ -225,10 +235,158 @@ def aankopen(conn, aankoop_id=None):
     ):
         regels[r["aankoop_id"]].append({"r": r, "verdeling": verdeling[r["id"]]})
 
-    return [
-        {"a": a, "regels": regels[a["id"]], "totaal": sum(x["r"]["aantal"] for x in regels[a["id"]])}
-        for a in bonnen
+    uit = []
+    for a in bonnen:
+        rs = regels[a["id"]]
+        zonder_prijs = sum(1 for x in rs if x["r"]["prijs"] is None)
+        ontbreekt = [] if a["betaald_door"] else ["betaler ontbreekt"]
+        if zonder_prijs:
+            ontbreekt.append(f"{zonder_prijs} zonder prijs")
+        uit.append({"a": a, "regels": rs, "totaal": sum(x["r"]["aantal"] for x in rs),
+                    "cent": sum(_cent(x["r"]["prijs"], x["r"]["aantal"]) for x in rs
+                                if x["r"]["prijs"] is not None),
+                    "ontbreekt": ontbreekt})
+    return uit
+
+
+def kosten(conn, kosten_id=None):
+    """Overige aankopen met wat er nog ontbreekt, oudste eerst."""
+    sql, args = "SELECT * FROM kosten", ()
+    if kosten_id is not None:
+        sql, args = sql + " WHERE id = ?", (kosten_id,)
+    uit = []
+    for k in conn.execute(sql + " ORDER BY id", args):
+        ontbreekt = [] if k["bedrag"] is not None else ["bedrag ontbreekt"]
+        if not k["betaald_door"]:
+            ontbreekt.append("betaler ontbreekt")
+        uit.append({"k": k, "ontbreekt": ontbreekt})
+    return uit
+
+
+# --- verrekening -------------------------------------------------------------
+# Alle bedragen in hele centen, zodat de standen exact optellen.
+
+def _cent(bedrag, aantal=1):
+    return round(bedrag * aantal * 100)
+
+
+def _verdeel(cent, gewichten):
+    """{sleutel: gewicht} → {sleutel: centen} naar rato; telt exact op (grootste rest)."""
+    totaal = sum(gewichten.values())
+    if not totaal:
+        return {k: 0 for k in gewichten}
+    exact = {k: cent * g / totaal for k, g in gewichten.items()}
+    uit = {k: int(x) for k, x in exact.items()}
+    rest = cent - sum(uit.values())
+    for k in sorted(exact, key=lambda k: exact[k] - uit[k], reverse=True)[:rest]:
+        uit[k] += 1
+    return uit
+
+
+def verrekening(conn):
+    """Stand per via: wijn + kosten tegenover wat de via betaald heeft. Saldo > 0: krijgt terug.
+    Ontbrekende prijzen en bedragen tellen niet mee.
+    kosten: aandeel in de posten voor alle bestellers (naar rato van de wijn), doorberekend.
+    eigen: aandeel in de posten die alleen de via's dragen (gelijk over PERSONEN).
+    doorberekend: wat een via aan zijn bestellingen kan doorberekenen.
+    geen_prijs / betaald_onbekend: de bedragen van de via zijn onvolledig door ontbrekende prijzen.
+    onbekende_betaler: wel verdeeld, maar nog bij niemand betaald.
+    onverdeeld: kosten voor de bestellers zolang er geen wijn met prijs is om ze over te verdelen.
+    De saldi plus onbekende_betaler min onverdeeld zijn samen precies 0."""
+    bonnen, posten, alle = aankopen(conn), kosten(conn), vias(conn)
+    wijn = {v["code"]: 0 for v in alle}
+    betaald = dict(wijn)
+    onbekend = 0
+    geen_prijs, betaald_onbekend = set(), set()  # via's waarvoor een prijs ontbreekt
+    for b in bonnen:
+        for x in b["regels"]:
+            if x["r"]["prijs"] is None:
+                geen_prijs.update(x["verdeling"])
+                if b["a"]["betaald_door"]:
+                    betaald_onbekend.add(b["a"]["betaald_door"])
+            else:
+                for via, c in _verdeel(_cent(x["r"]["prijs"], x["r"]["aantal"]), x["verdeling"]).items():
+                    wijn[via] += c
+        if b["a"]["betaald_door"]:
+            betaald[b["a"]["betaald_door"]] += b["cent"]
+        else:
+            onbekend += b["cent"]
+
+    voor_bestellers = voor_personen = 0
+    for p in posten:
+        if p["k"]["bedrag"] is None:
+            continue
+        c = _cent(p["k"]["bedrag"])
+        if p["k"]["verdeling"] == "personen":
+            voor_personen += c
+        else:
+            voor_bestellers += c
+        if p["k"]["betaald_door"]:
+            betaald[p["k"]["betaald_door"]] += c
+        else:
+            onbekend += c
+
+    aandeel = _verdeel(voor_bestellers, wijn)
+    eigen = _verdeel(voor_personen, {p: 1 for p in PERSONEN})
+    per_via = []
+    for v in alle:
+        c = v["code"]
+        doorberekend = wijn[c] + aandeel[c]
+        te_betalen = doorberekend + eigen.get(c, 0)
+        per_via.append({"via": v, "wijn": wijn[c], "kosten": aandeel[c], "eigen": eigen.get(c, 0),
+                        "doorberekend": doorberekend, "te_betalen": te_betalen,
+                        "betaald": betaald[c], "saldo": betaald[c] - te_betalen,
+                        "geen_prijs": c in geen_prijs, "betaald_onbekend": c in betaald_onbekend})
+    waarschuwingen = [
+        {"tekst": f"{b['a']['omschrijving'] or 'Aankoop'}: {', '.join(b['ontbreekt'])}", "aankoop_id": b["a"]["id"]}
+        for b in bonnen if b["ontbreekt"]
+    ] + [
+        {"tekst": f"{p['k']['omschrijving']}: {', '.join(p['ontbreekt'])}", "kosten_id": p["k"]["id"]}
+        for p in posten if p["ontbreekt"]
     ]
+    return {"per_via": per_via, "kosten": posten, "onbekende_betaler": onbekend,
+            "onverdeeld": voor_bestellers - sum(aandeel.values()), "waarschuwingen": waarschuwingen,
+            "totaal": {s: sum(r[s] for r in per_via) for s in ("wijn", "kosten", "eigen", "te_betalen", "betaald")}
+                      | {"geen_prijs": bool(geen_prijs), "betaald_onbekend": bool(betaald_onbekend)}}
+
+
+def klant_bedragen(conn, via):
+    """Wat elke bestelling van een via kost. Toegekende flessen tellen voor de gemiddelde prijs
+    van die wijn binnen de via; de rest staat op 'vrij'. Samen precies het totaal van de via."""
+    vr = verrekening(conn)
+    stand = next(r for r in vr["per_via"] if r["via"]["code"] == via)
+    gemiddeld, zonder_prijs = {}, defaultdict(int)
+    for r in conn.execute(
+        """SELECT r.wine_id, SUM(v.aantal * r.prijs) som, SUM(CASE WHEN r.prijs IS NULL THEN v.aantal ELSE 0 END) zonder,
+                  SUM(CASE WHEN r.prijs IS NULL THEN 0 ELSE v.aantal END) met
+           FROM regel_verdeling v JOIN aankoop_regel r ON r.id = v.regel_id
+           WHERE v.via = ? GROUP BY r.wine_id""",
+        (via,),
+    ):
+        if r["met"]:
+            gemiddeld[r["wine_id"]] = r["som"] / r["met"]
+        if r["zonder"]:
+            zonder_prijs[r["wine_id"]] = r["zonder"]
+
+    ks = klanten(conn, via)
+    gewichten = {k["k"]["id"]: sum(t["aantal"] * gemiddeld.get(t["wine_id"], 0) for t in k["toekenningen"])
+                 for k in ks}
+    p = pool(conn, via)
+    gewichten[None] = sum(x["vrij"] * gemiddeld.get(x["wijn"]["id"], 0) for x in p)
+    wijn, aandeel = _verdeel(stand["wijn"], gewichten), _verdeel(stand["kosten"], gewichten)
+
+    def rij(sleutel):
+        return {"wijn": wijn[sleutel], "kosten": aandeel[sleutel], "totaal": wijn[sleutel] + aandeel[sleutel]}
+
+    rijen = []
+    for k in ks:
+        open_ = sum(max(s["open"], 0) for s in k["vast_status"]) + sum(max(n, 0) for n in k["open"].values())
+        geen_prijs = any(t["wine_id"] in zonder_prijs for t in k["toekenningen"])
+        rijen.append({"k": k["k"], "flessen": sum(t["aantal"] for t in k["toekenningen"]),
+                      "open": open_, "geen_prijs": geen_prijs, **rij(k["k"]["id"])})
+    return {"rijen": rijen, "vrij": {"flessen": sum(x["vrij"] for x in p), **rij(None),
+                                      "geen_prijs": any(x["vrij"] and x["wijn"]["id"] in zonder_prijs for x in p)},
+            "stand": stand, "zonder_prijs": sum(zonder_prijs.values()), "open_punten": len(vr["waarschuwingen"])}
 
 
 # --- consistentie ------------------------------------------------------------
@@ -263,13 +421,18 @@ def _versie(v):
     return None if v in (None, "") else _int(v, "Versie")
 
 
-def _prijs(v):
-    if v in (None, ""):
+def _prijs(v, veld="Prijs"):
+    if v in (None, "") or not str(v).strip():
         return None
     try:
-        return float(str(v).replace(",", "."))
+        bedrag = float(str(v).replace(",", "."))
     except ValueError:
-        raise ValidatieFout("Prijs is geen geldig getal.")
+        raise ValidatieFout(f"{veld} is geen geldig getal.")
+    if not math.isfinite(bedrag):
+        raise ValidatieFout(f"{veld} is geen geldig getal.")
+    if bedrag < 0:
+        raise ValidatieFout(f"{veld} mag niet negatief zijn.")
+    return bedrag
 
 
 def _via(conn, code):
@@ -344,22 +507,24 @@ def klant_verwijderen(conn, klant_id):
 
 # --- aankopen ----------------------------------------------------------------
 
-def aankoop_opslaan(conn, aankoop_id, omschrijving, regels, versie=None):
+def aankoop_opslaan(conn, aankoop_id, omschrijving, regels, versie=None, betaald_door=None):
     """Slaat een bon op. regels: [{naam, categorie, prijs, verdeling: {via: n}}].
     Wijnen worden op naam herkend (hoofdletterongevoelig) en zo nodig aangemaakt.
     Met versie (uit het formulier) mislukt het als de bon intussen is gewijzigd,
-    bijvoorbeeld door een overdracht."""
+    bijvoorbeeld door een overdracht. betaald_door mag leeg blijven en later worden ingevuld."""
     schoon = [_regel(r) for r in regels]
     if not schoon:
         raise ValidatieFout("Vul minimaal één wijn in.")
     _geen_tegenstrijdige_categorie(schoon)
     versie = _versie(versie)
     omschrijving = (omschrijving or "").strip()
+    betaald_door = betaald_door or None
     with tx(conn):
-        for via in {v for r in schoon for v in r["verdeling"]}:
+        for via in {v for r in schoon for v in r["verdeling"]} | ({betaald_door} if betaald_door else set()):
             _via(conn, via)
         if aankoop_id:
-            sql, args = "UPDATE aankoop SET omschrijving=?, versie = versie + 1 WHERE id=?", [omschrijving, aankoop_id]
+            sql, args = ("UPDATE aankoop SET omschrijving=?, betaald_door=?, versie = versie + 1 WHERE id=?",
+                         [omschrijving, betaald_door, aankoop_id])
             if versie is not None:
                 sql, args = sql + " AND versie=?", args + [versie]
             if not conn.execute(sql, args).rowcount:
@@ -367,7 +532,7 @@ def aankoop_opslaan(conn, aankoop_id, omschrijving, regels, versie=None):
             conn.execute("DELETE FROM aankoop_regel WHERE aankoop_id=?", (aankoop_id,))
         else:
             aankoop_id = conn.execute(
-                "INSERT INTO aankoop (omschrijving) VALUES (?)", (omschrijving,)
+                "INSERT INTO aankoop (omschrijving, betaald_door) VALUES (?, ?)", (omschrijving, betaald_door)
             ).lastrowid
         for r in schoon:
             wine_id = _wijn_voor(conn, r["naam"], r["categorie"])
@@ -451,6 +616,41 @@ def aankoop_verwijderen(conn, aankoop_id):
         conn.execute("DELETE FROM aankoop WHERE id=?", (aankoop_id,))
         controleer(conn)
         _ruim_wijnen_op(conn)
+
+
+# --- overige aankopen -------------------------------------------------------------
+
+def kosten_opslaan(conn, kosten_id, omschrijving, bedrag, betaald_door, versie=None, verdeling="bestellers"):
+    """Nieuwe post (kosten_id leeg) of bestaande bijwerken; het bedrag mag leeg blijven."""
+    omschrijving = (omschrijving or "").strip()
+    if not omschrijving:
+        raise ValidatieFout("Omschrijving is verplicht.")
+    bedrag = _prijs(bedrag, "Bedrag")
+    if not betaald_door:
+        raise ValidatieFout(f"{omschrijving}: kies wie het betaald heeft.")
+    if verdeling not in KOSTEN_VERDELINGEN:
+        raise ValidatieFout(f"{omschrijving}: kies over wie het verdeeld wordt.")
+    versie = _versie(versie)
+    with tx(conn):
+        _via(conn, betaald_door)
+        if kosten_id:
+            sql, args = ("UPDATE kosten SET omschrijving=?, bedrag=?, betaald_door=?, verdeling=?, versie = versie + 1 WHERE id=?",
+                         [omschrijving, bedrag, betaald_door, verdeling, kosten_id])
+            if versie is not None:
+                sql, args = sql + " AND versie=?", args + [versie]
+            if not conn.execute(sql, args).rowcount:
+                raise _intussen_gewijzigd(omschrijving)
+        else:
+            kosten_id = conn.execute(
+                "INSERT INTO kosten (omschrijving, bedrag, betaald_door, verdeling) VALUES (?, ?, ?, ?)",
+                (omschrijving, bedrag, betaald_door, verdeling),
+            ).lastrowid
+    return kosten_id
+
+
+def kosten_verwijderen(conn, kosten_id):
+    with tx(conn):
+        conn.execute("DELETE FROM kosten WHERE id=?", (kosten_id,))
 
 
 # --- overdragen ---------------------------------------------------------------

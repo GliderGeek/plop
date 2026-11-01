@@ -104,6 +104,9 @@ a { color: var(--accent); }
 .chip.luxe { background: var(--cat-luxe-zacht); }
 .chip.klaar { outline: 1px solid var(--ok); }
 .chip.teveel { background: var(--fout); color: #fff; }
+.rij-noot { display: block; font-size: .8rem; font-weight: 400; color: var(--zacht); }
+.chip.waarschuwing { background: var(--overschot); color: #fff; }
+.waarschuwing-tekst, .waarschuwing-tekst a { color: var(--overschot); font-weight: 600; }
 .wens {
   margin-top: 6px; padding: 6px 10px; border-left: 3px solid var(--accent);
   background: var(--basis); border-radius: 4px; font-style: italic;
@@ -289,7 +292,7 @@ table.overzicht { border-collapse: collapse; width: 100%; font-size: .95rem; }
 .pill:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* wijn + prijs op één rij */
-.wijn-velden { display: grid; grid-template-columns: 1fr 90px; gap: 8px; }
+.wijn-velden { display: grid; grid-template-columns: 1fr 110px; gap: 8px; }
 .wijn-velden > label { margin-bottom: 4px; }
 
 /* verdeling: één rij per via — code, stepper, dan 'nog N', dicht bij elkaar */
@@ -347,3 +350,25 @@ a.knop.secundair { font-weight: 500; }
 
 .credit { padding: 16px; color: var(--zacht); font-size: .75rem; text-align: center; }
 .credit a { color: inherit; }
+
+/* verrekening */
+.kaart > .waarschuwing-tekst:first-child { margin: 0 0 8px; }
+.waarschuwingen { margin: 0; padding: 0; list-style-position: inside; }
+
+/* inklapbare secties op het overzicht */
+.sectie > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; min-height: 44px; }
+.sectie > summary::before { content: "▶"; font-size: 1.1rem; line-height: 1; color: var(--tekst); transition: transform .15s; }
+.sectie[open] > summary::before { transform: rotate(90deg); }
+.sectie > summary::-webkit-details-marker { display: none; }
+
+/* bedragveld: vast €-teken vóór de invoer */
+.euro-veld { position: relative; display: block; }
+.euro-veld::before { content: "€"; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--zacht); pointer-events: none; }
+.euro-veld input { padding-left: 30px; }
+
+/* kop van een bestelling: labels lopen door, de knoppen blijven rechtsboven */
+.klant-kop.met-acties { flex-wrap: nowrap; align-items: flex-start; }
+.klant-info { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.klant-info strong { margin-right: 0; }
+.kop-acties { flex: none; display: flex; align-items: center; gap: 8px; }
+.kop-acties form { margin: 0; }

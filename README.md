@@ -11,17 +11,18 @@ We bestellen met z'n vieren via vijf via-codes: **dd, j, h, m** en **hm** (de ge
    - Een aantal flessen *Iets luxer*.
    - Een aantal flessen *Luxe*.
    - Wensen als vrije tekst.
-2. **Tijdens de trip**: aankopen invoeren. Een aankoop is één bon met één of meer wijnen, elk met een categorie (*Iets luxer* of *Luxe*), optionele prijs en een verdeling over de via's (het aantal is de som daarvan). Elke via ziet hoeveel flessen hij nog nodig heeft. Flessen kun je toekennen aan een specifieke klant (voorlopig optioneel) of overdragen aan een andere via.
-3. **Achteraf**: de kosten verrekenen. Dat valt voorlopig buiten de app.
+2. **Tijdens de trip**: aankopen invoeren. Een aankoop is één bon met één of meer wijnen, elk met een categorie (*Iets luxer* of *Luxe*), optionele prijs per fles en een verdeling over de via's (het aantal is de som daarvan). Elke via ziet hoeveel flessen hij nog nodig heeft. Flessen kun je toekennen aan een specifieke klant (voorlopig optioneel) of overdragen aan een andere via.
+3. **Achteraf**: de kosten verrekenen. Per bon leg je vast welke via hem betaald heeft; daarnaast zijn er overige aankopen (tank, overnachting). Die gaan over alle bestellers (naar rato van de wijneuro's, en doorberekend aan de bestellingen) of alleen over de via's (gelijk over dd, j, h en m, niet doorberekend). Op het overzicht toont de sectie *Verrekening* de stand per via; de overige aankopen voer je in op de pagina *Aankopen* (betaald min te betalen) en de pagina van een via wat elke bestelling kost. Prijzen, bedragen en de betaler van een bon mogen later worden ingevuld: wat ontbreekt wordt gemeld. Bij overige aankopen is de betaler verplicht.
 
 Basisflessen lopen via hetzelfde patroon als de rest: ze worden gekocht op een bon, komen in de pool van een via en worden toegekend aan klanten. Het verschil is dat de vraag per specifieke fles is (bijv. 6 Pertois tradition) in plaats van per categorie; één tik vult aan wat een klant nog nodig heeft.
+
+Het overzicht heeft per fase een inklapbare sectie: *Besteld*, *Nog te kopen* en *Verrekening*. De browser onthoudt welke secties open staan.
 
 Er zijn geen rollen of logins: iedereen kan alles.
 
 ## TODO
 
 - site op domeinnaam + https
-- kosten verrekenen erin zetten
 
 ## Techniek
 
@@ -41,7 +42,9 @@ Er zijn geen rollen of logins: iedereen kan alles.
 
 Een aankoop (`aankoop`) heeft regels (`aankoop_regel`) met elk een verdeling over de via's (`regel_verdeling`). Wijnen worden niet apart beheerd: een regel verwijst naar een wijn op naam (hoofdletterongevoelig), die automatisch wordt aangemaakt en weer verdwijnt als hij op geen enkele bon meer staat. Overdragen tussen via's past de verdeling van de regels aan (nieuwste eerst) en wordt niet apart opgeslagen. Elke wijziging draait in een transactie (`BEGIN IMMEDIATE`, zodat gelijktijdige acties op elkaar wachten) met een consistentiecheck, die alles terugdraait als een via meer flessen toegekend zou hebben dan hij bezit. Bonnen en klanten hebben een `versie`: wie een bewerkformulier opslaat terwijl iemand anders die bon of klant intussen heeft gewijzigd (ook door een overdracht), krijgt een melding in plaats van andermans wijziging te overschrijven.
 
-De knop *Backup* onderaan het overzicht downloadt een Excel-bestand met tijdstip in de naam, met tabbladen voor bestellingen, toekenningen en aankopen. Dat is een leesbare momentopname; de app kan het bestand niet terugzetten.
+De verrekening wordt niet opgeslagen maar steeds berekend, in hele centen, uit `aankoop.betaald_door`, de aankoopregels en de tabel `kosten`; een overdracht verschuift de kosten dus mee. De bedragen per bestelling rekenen met de gemiddelde prijs van een wijn binnen de via, omdat toekenningen niet aan een bon hangen. Flessen die nog niet zijn toegekend, staan op een eigen rij, zodat de rijen altijd optellen tot het totaal van de via.
+
+De knop *Backup* onderaan het overzicht downloadt een Excel-bestand met tijdstip in de naam, met tabbladen voor bestellingen, toekenningen, aankopen, kosten en verrekening. Dat is een leesbare momentopname; de app kan het bestand niet terugzetten.
 
 Schemawijzigingen voor bestaande databases staan als kleine migraties in `db.py` en draaien automatisch bij het starten.
 

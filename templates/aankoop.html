@@ -36,8 +36,8 @@
           {% for n in vaste_namen %}<option {{ 'selected' if r and r.naam == n }}>{{ n }}</option>{% endfor %}
         </select>
       </label>
-      <label>Prijs
-        <input name="regel-{{ i }}-prijs" inputmode="decimal" placeholder="€" value="{{ r.prijs|getal if r }}">
+      <label>Prijs per fles
+        <span class="euro-veld"><input name="regel-{{ i }}-prijs" inputmode="decimal" value="{{ r.prijs|getal if r }}"></span>
       </label>
     </div>
 
@@ -61,13 +61,18 @@
 {% endmacro %}
 
 {% block main %}
-<h1>{{ 'Aankoop bewerken' if bon else 'Nieuwe aankoop' }}</h1>
+<h1>{{ 'Aankoop bewerken' if bon else 'Champagne aankoop' }}</h1>
 <form method="post" data-bewaak action="{{ url_for('aankoop_opslaan', aankoop_id=bon.a.id) if bon else url_for('aankoop_opslaan') }}">
   {% if bon %}<input type="hidden" name="versie" value="{{ bon.a.versie }}">{% endif %}
   <label class="wijnhuis">Naam
     <input name="omschrijving" value="{{ bon.a.omschrijving if bon }}" placeholder="bijv. Tissier">
   </label>
-
+  <label class="wijnhuis">Betaald door
+    <select name="betaald_door">
+      <option value="">nog onbekend</option>
+      {% for v in alle_vias %}<option value="{{ v.code }}" {{ 'selected' if bon and bon.a.betaald_door == v.code }}>{{ v.code }}</option>{% endfor %}
+    </select>
+  </label>
 
   <datalist id="wijnlijst">{% for n in wijnnamen %}<option value="{{ n }}">{% endfor %}</datalist>
 

@@ -99,6 +99,18 @@ def test_klant_verwijderen_op_via_pagina(client, conn):
     assert r.request.path == "/via/dd" and "Nog geen bestellingen" in r.text
 
 
+def test_overzicht_heeft_secties_in_volgorde_van_de_fases(client):
+    assert re.findall(r'data-sectie="([^"]+)"', client.get("/").text) == ["besteld", "nog-te-kopen", "verrekening"]
+
+
+def test_overzicht_telt_nog_te_kopen_en_te_veel(client, conn):
+    assert "nog te kopen</span>" not in client.get("/").text
+    logic.klant_opslaan(conn, None, "dd", "Piet", "", 3, 0, {})
+    logic.aankoop_opslaan(conn, None, "", [{"naam": "Krug", "categorie": "luxe", "verdeling": {"dd": 2}}])
+    tekst = client.get("/").text
+    assert "3 nog te kopen</span>" in tekst and "2 teveel gekocht</span>" in tekst
+
+
 def test_overzicht_toont_bestelde_totalen(client, conn):
     logic.klant_opslaan(conn, None, "dd", "Piet", "", 7, 0, {})
     assert '<td class="nog">7</td>' in client.get("/").text
@@ -115,7 +127,7 @@ def test_backup_bevat_alle_data(client, conn):
     assert "attachment" in r.headers["Content-Disposition"]
     assert re.search(r"champagne-\d{4}-\d{2}-\d{2}-\d{6}\.xlsx", r.headers["Content-Disposition"])
     wb = openpyxl.load_workbook(io.BytesIO(r.data))
-    assert wb.sheetnames == ["Bestellingen", "Toekenningen", "Aankopen", "Snapshot"]
+    assert wb.sheetnames == ["Bestellingen", "Toekenningen", "Aankopen", "Kosten", "Verrekening", "Snapshot"]
     klant = wb["Bestellingen"]["B2"]
     assert klant.value == "=1+1" and klant.data_type == "s"  # geen formule
     assert wb["Bestellingen"].cell(2, wb["Bestellingen"].max_column).value == "wens"
@@ -149,3 +161,77 @@ def test_klant_compleet_na_laatste_fles(client, conn):
 def test_klant_zonder_bestelling_is_niet_compleet(client, conn):
     klant_id = logic.klant_opslaan(conn, None, "dd", "Piet", "", 0, 0, {})
     assert not logic.klant(conn, klant_id)["compleet"]
+
+
+def test_aankoop_met_betaler_en_waarschuwingen(client, conn):
+    client.post("/aankoop", data={"omschrijving": "Tissier", "regel-0-naam": "Juliette", "regel-0-categorie": "luxe",
+                                  "regel-0-via-dd": "2", "betaald_door": ""})
+    bon = logic.aankopen(conn)[0]
+    assert "betaler ontbreekt" in client.get("/aankopen").text
+    tekst = client.get("/").text
+    assert "1 open punt" in tekst and f"/aankoop/{bon['a']['id']}/bewerk" in tekst
+
+    client.post(f"/aankoop/{bon['a']['id']}", data={
+        "omschrijving": "Tissier", "versie": bon["a"]["versie"], "betaald_door": "j", "regel-0-naam": "Juliette",
+        "regel-0-categorie": "luxe", "regel-0-prijs": "12,50", "regel-0-via-dd": "2"})
+    assert logic.aankopen(conn)[0]["a"]["betaald_door"] == "j"
+    assert 'value="j" selected' in client.get(f"/aankoop/{bon['a']['id']}/bewerk").text
+    tekst = client.get("/").text
+    assert "open punt" not in tekst and "€ -25,00" in tekst
+
+
+def test_kosten_toevoegen_bewerken_verwijderen(client, conn):
+    r = client.post("/kosten", data={"omschrijving": "Tank", "bedrag": "", "betaald_door": "j", "verdeling": "bestellers"})
+    assert r.status_code == 303
+    k = logic.kosten(conn)[0]["k"]
+    assert "Tank: bedrag ontbreekt" in client.get("/").text
+    assert f'action="/kosten/{k["id"]}"' in client.get("/aankopen").text
+
+    r = client.post(f"/kosten/{k['id']}", headers=HTMX, data={"omschrijving": "Tank", "betaald_door": "j", "verdeling": "bestellers", "versie": k["versie"] + 1})
+    assert r.headers["HX-Retarget"] == "#melding" and "intussen gewijzigd" in r.text
+
+    client.post(f"/kosten/{k['id']}", data={"omschrijving": "Tank", "bedrag": "40,5", "betaald_door": "h",
+                                            "verdeling": "personen", "versie": k["versie"]})
+    k = logic.kosten(conn)[0]["k"]
+    assert (k["bedrag"], k["betaald_door"], k["verdeling"]) == (40.5, "h", "personen")
+
+    client.post(f"/kosten/{k['id']}/verwijder")
+    assert not logic.kosten(conn)
+
+
+def test_kosten_zonder_omschrijving_geeft_melding(client):
+    r = client.post("/kosten", headers=HTMX, data={"omschrijving": " ", "bedrag": "1"})
+    assert r.headers["HX-Retarget"] == "#melding"
+
+
+def test_via_pagina_toont_bedrag_per_bestelling(client, conn):
+    klant_id = logic.klant_opslaan(conn, None, "dd", "Piet", "", 0, 2, {})
+    logic.aankoop_opslaan(conn, None, "", [{"naam": "Krug", "categorie": "luxe", "prijs": "30", "verdeling": {"dd": 2}}],
+                          betaald_door="dd")
+    wine_id = conn.execute("SELECT id FROM wine WHERE naam = 'Krug'").fetchone()["id"]
+    logic.toekenning_wijzig(conn, klant_id, wine_id, 1)
+    tekst = client.get("/via/dd").text
+    assert "In rekening brengen" in tekst and "Nog niet toegekend" in tekst and tekst.count("€ 30,00") >= 2
+    assert "nog 1 fles open" in tekst
+
+
+def test_via_pagina_toont_geen_nul_bij_ontbrekende_prijs(client, conn):
+    piet = logic.klant_opslaan(conn, None, "dd", "Piet", "", 0, 2, {})
+    logic.klant_opslaan(conn, None, "dd", "Jan", "", 0, 2, {})
+    logic.aankoop_opslaan(conn, None, "", [{"naam": "Krug", "categorie": "luxe", "verdeling": {"dd": 2}},
+                                           {"naam": "Ruinart", "categorie": "luxe", "prijs": "30", "verdeling": {"dd": 1}}])
+    krug = conn.execute("SELECT id FROM wine WHERE naam = 'Krug'").fetchone()["id"]
+    logic.toekenning_wijzig(conn, piet, krug, 1)
+    tekst = client.get("/via/dd").text
+    assert "prijs ontbreekt" in tekst and "€ 30,00 + ?" in tekst  # Piet; de rij Nog niet toegekend en het via-totaal
+    assert "<td>–</td>" in tekst  # Jan heeft nog niets toegekend
+
+
+def test_verrekening_toont_onbekende_bedragen_als_vraagteken(client, conn):
+    logic.aankoop_opslaan(conn, None, "", [{"naam": "Krug", "categorie": "luxe", "prijs": "20", "verdeling": {"m": 1}},
+                                           {"naam": "Ruinart", "categorie": "luxe", "verdeling": {"dd": 1, "m": 1}}],
+                          betaald_door="h")
+    tekst = client.get("/").text
+    assert "<td>€ 20,00 + ?</td>" in tekst  # champagne van m en betaald door h
+    assert "<td>?</td>" in tekst  # champagne van dd
+    assert "€ -20,00 ± ?" in tekst and "€ 20,00 ± ?" in tekst

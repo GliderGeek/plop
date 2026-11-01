@@ -25,6 +25,8 @@ def init(conn):
     conn.executescript(SCHEMA.read_text())
     _migreer_naar_regels(conn)
     _voeg_versie_toe(conn)
+    _voeg_betaler_toe(conn)
+    _voeg_kostenverdeling_toe(conn)
     with tx(conn):
         # categorie 'klein' (halve flessen) bestaat niet meer: valt onder basis
         conn.execute("UPDATE wine SET categorie = 'basis' WHERE categorie = 'klein'")
@@ -58,6 +60,19 @@ def _voeg_versie_toe(conn):
     for tabel in ("aankoop", "klant"):
         if "versie" not in _kolommen(conn, tabel):
             conn.execute(f"ALTER TABLE {tabel} ADD COLUMN versie INTEGER NOT NULL DEFAULT 0")
+
+
+def _voeg_betaler_toe(conn):
+    """Wie een aankoop betaald heeft (leeg: nog onbekend)."""
+    if "betaald_door" not in _kolommen(conn, "aankoop"):
+        conn.execute("ALTER TABLE aankoop ADD COLUMN betaald_door TEXT REFERENCES via(code)")
+
+
+def _voeg_kostenverdeling_toe(conn):
+    """Over wie overige aankopen verdeeld worden; bestaande posten blijven bij de bestellers."""
+    if "verdeling" not in _kolommen(conn, "kosten"):
+        conn.execute("""ALTER TABLE kosten ADD COLUMN verdeling TEXT NOT NULL DEFAULT 'bestellers'
+                        CHECK (verdeling IN ('bestellers', 'personen'))""")
 
 
 def _migreer_naar_regels(conn):

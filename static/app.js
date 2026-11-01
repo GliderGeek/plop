@@ -208,6 +208,24 @@ document.addEventListener("htmx:afterSwap", (e) => {
   if (form) delete form.dataset.opslaan;
 });
 
+// Inklapbare secties op het overzicht: de stand blijft per browser bewaard.
+// Een link naar een sectie (#verrekening) klapt die altijd open.
+function herstelSecties() {
+  document.querySelectorAll("details[data-sectie]").forEach((sectie) => {
+    const stand = localStorage.getItem(`sectie-${sectie.dataset.sectie}`);
+    if (stand) sectie.open = stand === "open";
+    if (location.hash === `#${sectie.id}`) sectie.open = true;
+  });
+}
+
+document.addEventListener("DOMContentLoaded", herstelSecties);
+document.addEventListener("htmx:load", herstelSecties);
+// 'toggle' borrelt niet op, dus afvangen in de capture-fase
+document.addEventListener("toggle", (e) => {
+  if (!e.target.matches?.("details[data-sectie]")) return;
+  localStorage.setItem(`sectie-${e.target.dataset.sectie}`, e.target.open ? "open" : "dicht");
+}, true);
+
 // Bestelling van een klant helemaal toegekend: ontkurken, bubbels en een melding.
 // Alleen op de kaart waarop getikt is, dus niet bij wijzigingen van iemand anders.
 let geluid;
