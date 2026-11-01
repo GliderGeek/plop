@@ -3,12 +3,14 @@ import re
 
 from flask import (Flask, abort, flash, g, make_response, redirect, render_template,
                    request, url_for)
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import db
 import logic
 from logic import CATEGORIEEN, ZOEK_CATEGORIEEN, ValidatieFout
 
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.secret_key = os.environ.get("SECRET_KEY", "champagne-dev")
 DB_PATH = os.environ.get("CHAMPAGNE_DB", os.path.join(app.root_path, "champagne.db"))
 
