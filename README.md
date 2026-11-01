@@ -6,7 +6,7 @@ Een kleine webapp om de champagne te beheren die we tijdens onze trip kopen voor
 
 We bestellen met z'n vieren via vijf via-codes: **dd, j, h, m** en **hm** (de gezamenlijke bestelling van h en m). De app ondersteunt drie fases:
 
-1. **Voorbereiding**: per klant ("voor wie") vastleggen wat die wil:
+1. **Voorbereiding**: op de pagina van de via per klant ("voor wie") vastleggen wat die wil; het overzicht toont de totalen:
    - Exacte aantallen van de vier basisflessen: Pertois/Dagonet tradition, heel en half.
    - Een aantal flessen *Iets luxer*.
    - Een aantal flessen *Luxe*.

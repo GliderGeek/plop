@@ -1,7 +1,7 @@
 import os
 import re
 
-from flask import (Flask, abort, flash, g, make_response, redirect, render_template,
+from flask import (Flask, flash, g, make_response, redirect, render_template,
                    request, url_for)
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -87,28 +87,12 @@ def terug(default):
 
 @app.get("/")
 def overzicht():
-    return render_template("overzicht.html", ov=logic.overzicht(get_conn()))
+    conn = get_conn()
+    return render_template("overzicht.html", ov=logic.overzicht(conn),
+                           totalen=logic.bestel_totalen(conn))
 
 
-# --- bestellingen ------------------------------------------------------------
-
-def bestellingen_context(conn):
-    ks = logic.klanten(conn)
-    return {"vaste": logic.wijnen(conn, vast=True), "klanten": ks,
-            "totalen": logic.bestel_totalen(conn, ks)}
-
-
-def klant_of_404(conn, klant_id):
-    k = logic.klant(conn, klant_id)
-    if k is None:
-        abort(404)
-    return k
-
-
-@app.get("/bestellingen")
-def bestellingen():
-    return render_template("bestellingen.html", **bestellingen_context(get_conn()))
-
+# --- klanten -----------------------------------------------------------------
 
 def klant_form_opslaan(conn, klant_id):
     f = request.form
@@ -117,51 +101,22 @@ def klant_form_opslaan(conn, klant_id):
                                f.get("iets_luxer_n"), f.get("luxe_n"), vast, f.get("versie"))
 
 
-def klant_kaart(conn, klant_id, nieuw=False):
-    k = klant_of_404(conn, klant_id)
-    return render_template("partials/klant_kaart_oob.html", k=k, nieuw=nieuw,
-                           **bestellingen_context(conn))
-
-
 @app.post("/klant")
 def klant_nieuw():
-    conn = get_conn()
-    klant_id = klant_form_opslaan(conn, None)
-    if is_htmx():
-        resp = make_response(klant_kaart(conn, klant_id, nieuw=True))
-        resp.headers["HX-Retarget"] = "#lijst-" + request.form["via"]  # via kan zijn gewijzigd
-        return resp
-    return redirect(url_for("bestellingen"), code=303)
-
-
-@app.get("/klant/<int:klant_id>")
-def klant_toon(klant_id):
-    return klant_kaart(get_conn(), klant_id)
-
-
-@app.get("/klant/<int:klant_id>/bewerk")
-def klant_bewerk(klant_id):
-    conn = get_conn()
-    return render_template("partials/klant_form.html", k=klant_of_404(conn, klant_id),
-                           vaste=logic.wijnen(conn, vast=True))
+    klant_form_opslaan(get_conn(), None)
+    return terug(url_for("overzicht"))
 
 
 @app.post("/klant/<int:klant_id>")
 def klant_opslaan(klant_id):
-    conn = get_conn()
-    klant_form_opslaan(conn, klant_id)
-    if is_htmx():
-        return klant_kaart(conn, klant_id)
-    return redirect(url_for("bestellingen"), code=303)
+    klant_form_opslaan(get_conn(), klant_id)
+    return terug(url_for("overzicht"))
 
 
 @app.post("/klant/<int:klant_id>/verwijder")
 def klant_verwijder(klant_id):
-    conn = get_conn()
-    logic.klant_verwijderen(conn, klant_id)
-    if is_htmx():
-        return render_template("partials/totalen.html", oob=True, **bestellingen_context(conn))
-    return redirect(url_for("bestellingen"), code=303)
+    logic.klant_verwijderen(get_conn(), klant_id)
+    return terug(url_for("overzicht"))
 
 
 # --- aankopen ----------------------------------------------------------------
@@ -241,7 +196,7 @@ def via(code):
         return redirect(url_for("overzicht"))
     ov = next(r for r in logic.overzicht(conn)["per_via"] if r["via"]["code"] == code)
     return render_template("via.html", v=v, ov=ov, pool=logic.pool(conn, code),
-                           klanten=logic.klanten(conn, code))
+                           klanten=logic.klanten(conn, code), vaste=logic.wijnen(conn, vast=True))
 
 
 @app.post("/toekenning")

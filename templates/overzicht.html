@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{# nog > 0: nog kopen (vet); 0: klaar (puntje); < 0: te veel gekocht (oranje) #}
+{# nog > 0: nog kopen of besteld (vet); 0: klaar of niets (puntje); < 0: te veel gekocht (oranje) #}
 {% macro cel(nog) %}
   {% if nog > 0 %}<td class="nog">{{ nog }}</td>
   {% elif nog == 0 %}<td class="klaar">·</td>
@@ -26,6 +26,38 @@
         </tr>
         {% endfor %}
       </tbody>
+    </table>
+  </div>
+</div>
+
+<h1>Besteld</h1>
+<div class="kaart tabel-kaart">
+  <div class="tabel-scroll">
+    <table class="overzicht">
+      <thead><tr>
+        <th>Via</th>
+        {% for x in ov.totaal_vast %}<th>{{ x.wijn.naam|kortnaam }}</th>{% endfor %}
+        {% for c in ZOEK_CATEGORIEEN %}<th>{{ CATEGORIEEN[c] }}</th>{% endfor %}
+        <th>Totaal</th>
+      </tr></thead>
+      <tbody>
+        {% for v in alle_vias %}{% set t = totalen[v.code] %}
+        <tr>
+          <th>{{ v.code }}</th>
+          {% for x in ov.totaal_vast %}{{ cel(t.vast[x.wijn.id]) }}{% endfor %}
+          {% for c in ZOEK_CATEGORIEEN %}{{ cel(t[c]) }}{% endfor %}
+          {{ cel(t.totaal) }}
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>{% set t = totalen['_'] %}
+        <tr>
+          <th>Samen</th>
+          {% for x in ov.totaal_vast %}{{ cel(t.vast[x.wijn.id]) }}{% endfor %}
+          {% for c in ZOEK_CATEGORIEEN %}{{ cel(t[c]) }}{% endfor %}
+          {{ cel(t.totaal) }}
+        </tr>
+      </tfoot>
     </table>
   </div>
 </div>

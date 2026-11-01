@@ -14,7 +14,6 @@
     {% for v in alle_vias %}
       <a href="{{ url_for('via', code=v.code) }}" class="via-link {{ 'actief' if request.view_args and request.view_args.get('code') == v.code }}">{{ v.code }}</a>
     {% endfor %}
-    <a href="{{ url_for('bestellingen') }}" class="{{ 'actief' if request.endpoint == 'bestellingen' }}">Bestellingen</a>
     <a href="{{ url_for('aankopen') }}" class="{{ 'actief' if request.endpoint in ('aankopen', 'aankoop_nieuw', 'aankoop_bewerk') }}">Aankopen</a>
   </nav>
   <div id="melding">

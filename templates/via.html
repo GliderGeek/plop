@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 {% from "partials/fles.html" import fles %}
+{% from "partials/iconen.html" import icoon %}
+{% from "partials/klant_velden.html" import klant_velden with context %}
 {% block main %}
 <div id="via-body">
 <h1>Via {{ v.code }}</h1>
@@ -43,7 +45,7 @@
   </button>
 </form>
 {% endmacro %}
-{% macro post_attrs() %}hx-post="{{ url_for('toekenning') }}" hx-target="#via-body" hx-select="#via-body" hx-swap="outerHTML"{% endmacro %}
+{% macro post_attrs(url=url_for('toekenning')) %}hx-post="{{ url }}" hx-target="#via-body" hx-select="#via-body" hx-swap="outerHTML"{% endmacro %}
 
 <h2>Pool <small>(gekocht door {{ v.code }})</small></h2>
 {% if not pool %}<p class="uitleg">Nog niets gekocht voor {{ v.code }}.</p>
@@ -79,7 +81,10 @@
 {% endfor %}
 </div>
 
-<h2>Klanten</h2>
+<div class="kop-met-knop">
+  <h2>Bestellingen</h2>
+  <button type="button" popovertarget="nieuwe-klant">+ Nieuwe bestelling</button>
+</div>
 {% for k in klanten %}
 {% set vast_open = k.vast_status|selectattr('open', 'gt', 0)|list %}
 {% set luxer_open = k.open.values()|select('gt', 0)|first %}
@@ -92,6 +97,11 @@
     {% for c in ZOEK_CATEGORIEEN %}{% if k.nodig[c] or k.heeft[c] %}
       <span class="chip {{ c }} {{ 'teveel' if k.open[c] < 0 else ('klaar' if k.open[c] == 0) }}">{{ CATEGORIEEN[c] }} {% if k.open[c] == 0 %}✓{% else %}{{ k.heeft[c] }}/{{ k.nodig[c] }}{% endif %}</span>
     {% endif %}{% endfor %}
+    <button type="button" class="icoon-knop" popovertarget="bewerk-{{ k.k.id }}" title="Bewerken" aria-label="Bewerken">{{ icoon('pen') }}</button>
+    <form {{ post_attrs(url_for('klant_verwijder', klant_id=k.k.id)) }} hx-confirm="{{ k.k.naam }} verwijderen?">
+      <input type="hidden" name="terug" value="{{ terug }}">
+      <button class="icoon-knop gevaar-tekst" title="Verwijderen" aria-label="Verwijderen">{{ icoon('prullenbak') }}</button>
+    </form>
   </div>
   {% if k.k.aantekening %}<div class="wens">{{ k.k.aantekening }}</div>{% endif %}
 
@@ -142,8 +152,34 @@
   </details>
   {% endif %}
 </div>
+{# naast de kaart: bewerken is geen tik die de bestelling compleet maakt (geen feestje) #}
+<div popover id="bewerk-{{ k.k.id }}" class="popup">
+  <h3>Bestelling {{ k.k.naam }} bewerken</h3>
+  <form {{ post_attrs(url_for('klant_opslaan', klant_id=k.k.id)) }}>
+    <input type="hidden" name="terug" value="{{ terug }}">
+    {{ klant_velden(vaste, k) }}
+    <div class="knoppen">
+      <button type="submit">Opslaan</button>
+      <button type="button" class="secundair" popovertarget="bewerk-{{ k.k.id }}" popovertargetaction="hide" onclick="this.form.reset()">Annuleer</button>
+    </div>
+  </form>
+</div>
 {% else %}
-<p class="uitleg">Nog geen klanten voor {{ v.code }}.</p>
+<p class="uitleg">Nog geen bestellingen voor {{ v.code }}.</p>
 {% endfor %}
+</div>
+
+{# buiten #via-body: blijft open staan, zodat je meteen de volgende bestelling kunt invoeren #}
+<div popover id="nieuwe-klant" class="popup">
+  <h3>Nieuwe bestelling voor {{ v.code }}</h3>
+  <form {{ post_attrs(url_for('klant_nieuw')) }}
+        hx-on::after-request="if (event.detail.successful && !event.detail.xhr.getResponseHeader('HX-Reswap')) { this.reset(); this.querySelector('[name=naam]').focus(); }">
+    <input type="hidden" name="terug" value="{{ terug }}">
+    {{ klant_velden(vaste, via_code=v.code) }}
+    <div class="knoppen">
+      <button type="submit">Toevoegen</button>
+      <button type="button" class="secundair" popovertarget="nieuwe-klant" popovertargetaction="hide" onclick="this.form.reset()">Sluiten</button>
+    </div>
+  </form>
 </div>
 {% endblock %}

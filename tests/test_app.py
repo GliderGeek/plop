@@ -66,22 +66,43 @@ def test_ongeldige_post_geeft_melding_geen_500(client):
     assert r.headers["HX-Retarget"] == "#melding"
 
 
-def test_onbekende_klant_geeft_404(client):
-    assert client.get("/klant/999").status_code == 404
-    assert client.get("/klant/999/bewerk").status_code == 404
+def test_onbekende_klant_geeft_melding(client):
+    r = client.post("/klant/999", headers=HTMX, data={"via": "dd", "naam": "Joris"})
+    assert r.headers["HX-Retarget"] == "#melding"
+
+
+def test_klant_toevoegen_op_via_pagina(client, conn):
+    assert 'type="hidden" name="via" value="m"' in client.get("/via/m").text
+    r = client.post("/klant", headers=HTMX, follow_redirects=True,
+                    data={"via": "m", "naam": "Joris", "iets_luxer_n": "2", "terug": "/via/m"})
+    assert r.request.path == "/via/m" and "Joris" in r.text
+    assert logic.klanten(conn, "m")[0]["k"]["naam"] == "Joris"
 
 
 def test_klant_bewerken_stuurt_versie_mee(client, conn):
     client.post("/klant", data={"via": "dd", "naam": "Joris", "iets_luxer_n": "2"})
     k = logic.klanten(conn)[0]
-    assert f'name="versie" value="{k["k"]["versie"]}"' in client.get(f"/klant/{k['k']['id']}/bewerk").text
-    r = client.post(f"/klant/{k['k']['id']}", headers=HTMX,
-                    data={"via": "dd", "naam": "Joris", "iets_luxer_n": "3", "versie": k["k"]["versie"]})
-    assert r.status_code == 200 and "Iets luxer 3" in r.text
+    assert f'name="versie" value="{k["k"]["versie"]}"' in client.get("/via/dd").text
+    r = client.post(f"/klant/{k['k']['id']}", headers=HTMX, follow_redirects=True,
+                    data={"via": "dd", "naam": "Joris", "iets_luxer_n": "3", "versie": k["k"]["versie"],
+                          "terug": "/via/dd"})
+    assert r.status_code == 200 and "0/3" in r.text
+
+
+def test_klant_verwijderen_op_via_pagina(client, conn):
+    klant_id = logic.klant_opslaan(conn, None, "dd", "Piet", "", 1, 0, {})
+    r = client.post(f"/klant/{klant_id}/verwijder", headers=HTMX, follow_redirects=True,
+                    data={"terug": "/via/dd"})
+    assert r.request.path == "/via/dd" and "Nog geen bestellingen" in r.text
+
+
+def test_overzicht_toont_bestelde_totalen(client, conn):
+    logic.klant_opslaan(conn, None, "dd", "Piet", "", 7, 0, {})
+    assert '<td class="nog">7</td>' in client.get("/").text
 
 
 def test_paginas_renderen(client):
-    for url in ("/", "/bestellingen", "/aankopen", "/aankoop/nieuw", "/via/dd"):
+    for url in ("/", "/aankopen", "/aankoop/nieuw", "/via/dd"):
         assert client.get(url).status_code == 200, url
 
 

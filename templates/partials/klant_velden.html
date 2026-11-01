@@ -3,15 +3,17 @@
   {% if kk %}<input type="hidden" name="versie" value="{{ kk.versie }}">{% endif %}
   <div class="rij">
     <label class="breed">Voor wie
-      <input name="naam" required value="{{ kk.naam if kk }}" autocomplete="off">
+      <input name="naam" required value="{{ kk.naam if kk }}" autocomplete="off" {{ 'autofocus' if not kk }}>
     </label>
+    {% if kk %}
     <label>Via
       <select name="via">
         {% for v in alle_vias %}
-          <option value="{{ v.code }}" {{ 'selected' if (kk and kk.via == v.code) or (not kk and v.code == via_code) }}>{{ v.code }}</option>
+          <option value="{{ v.code }}" {{ 'selected' if kk.via == v.code }}>{{ v.code }}</option>
         {% endfor %}
       </select>
     </label>
+    {% else %}<input type="hidden" name="via" value="{{ via_code }}">{% endif %}
   </div>
   <div class="rij aantallen">
     {% for w in vaste %}

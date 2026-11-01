@@ -287,7 +287,7 @@ def _bestaande_wijn(conn, wine_id):
 
 def _bestaande_klant(conn, klant_id):
     if not conn.execute("SELECT 1 FROM klant WHERE id = ?", (klant_id,)).fetchone():
-        raise ValidatieFout("Deze klant bestaat niet (meer). Laad de pagina opnieuw.")
+        raise ValidatieFout("Deze bestelling bestaat niet (meer). Laad de pagina opnieuw.")
 
 
 def _intussen_gewijzigd(wat):
