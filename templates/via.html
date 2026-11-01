@@ -47,8 +47,8 @@
 {% endmacro %}
 {% macro post_attrs(url=url_for('toekenning')) %}hx-post="{{ url }}" hx-target="#via-body" hx-select="#via-body" hx-swap="outerHTML"{% endmacro %}
 
-<h2>Pool <small>(gekocht door {{ v.code }})</small></h2>
-{% if not pool %}<p class="uitleg">Nog niets gekocht voor {{ v.code }}.</p>
+<h2>Gekocht door {{ v.code }}</h2>
+{% if not pool %}<p class="uitleg">Nog niets gekocht door {{ v.code }}.</p>
 {% elif not beschikbaar %}<p class="uitleg">Alles is toegekend.</p>{% endif %}
 <div class="pool-grid">
 {% for p in beschikbaar %}
@@ -82,7 +82,7 @@
 </div>
 
 <div class="kop-met-knop">
-  <h2>Bestellingen</h2>
+  <h2>Besteld via {{ v.code }}</h2>
   <button type="button" popovertarget="nieuwe-klant">+ Nieuwe bestelling</button>
 </div>
 {% for k in klanten %}
@@ -98,7 +98,7 @@
       <span class="chip {{ c }} {{ 'teveel' if k.open[c] < 0 else ('klaar' if k.open[c] == 0) }}">{{ CATEGORIEEN[c] }} {% if k.open[c] == 0 %}✓{% else %}{{ k.heeft[c] }}/{{ k.nodig[c] }}{% endif %}</span>
     {% endif %}{% endfor %}
     <button type="button" class="icoon-knop" popovertarget="bewerk-{{ k.k.id }}" title="Bewerken" aria-label="Bewerken">{{ icoon('pen') }}</button>
-    <form {{ post_attrs(url_for('klant_verwijder', klant_id=k.k.id)) }} hx-confirm="{{ k.k.naam }} verwijderen?">
+    <form {{ post_attrs(url_for('klant_verwijder', klant_id=k.k.id)) }} hx-confirm="Bestelling {{ k.k.naam }} verwijderen?">
       <input type="hidden" name="terug" value="{{ terug }}">
       <button class="icoon-knop gevaar-tekst" title="Verwijderen" aria-label="Verwijderen">{{ icoon('prullenbak') }}</button>
     </form>
@@ -165,13 +165,13 @@
   </form>
 </div>
 {% else %}
-<p class="uitleg">Nog geen bestellingen voor {{ v.code }}.</p>
+<p class="uitleg">Nog geen bestellingen via {{ v.code }}.</p>
 {% endfor %}
 </div>
 
 {# buiten #via-body: blijft open staan, zodat je meteen de volgende bestelling kunt invoeren #}
 <div popover id="nieuwe-klant" class="popup">
-  <h3>Nieuwe bestelling voor {{ v.code }}</h3>
+  <h3>Nieuwe bestelling via {{ v.code }}</h3>
   <form {{ post_attrs(url_for('klant_nieuw')) }}
         hx-on::after-request="if (event.detail.successful && !event.detail.xhr.getResponseHeader('HX-Reswap')) { this.reset(); this.querySelector('[name=naam]').focus(); }">
     <input type="hidden" name="terug" value="{{ terug }}">
