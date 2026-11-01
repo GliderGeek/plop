@@ -8,7 +8,7 @@
   <script src="{{ url_for('static', filename='htmx.min.js') }}" defer></script>
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
-<body hx-boost="true">
+<body hx-boost="true" data-plop="{{ url_for('static', filename='champagne_cork_pop_pour.mp3') }}">
   <nav class="nav">
     <a href="{{ url_for('overzicht') }}" class="{{ 'actief' if request.endpoint == 'overzicht' }}">Overzicht</a>
     {% for v in alle_vias %}
@@ -28,5 +28,6 @@
   <main>
     {% block main %}{% endblock %}
   </main>
+  <footer class="credit">Geluidseffecten van <a href="https://www.zapsplat.com">zapsplat.com</a></footer>
 </body>
 </html>

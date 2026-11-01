@@ -83,3 +83,20 @@ def test_klant_bewerken_stuurt_versie_mee(client, conn):
 def test_paginas_renderen(client):
     for url in ("/", "/bestellingen", "/aankopen", "/aankoop/nieuw", "/via/dd"):
         assert client.get(url).status_code == 200, url
+
+
+def test_klant_compleet_na_laatste_fles(client, conn):
+    klant_id = logic.klant_opslaan(conn, None, "dd", "Piet", "", 0, 1, {})
+    logic.aankoop_opslaan(conn, None, "", [{"naam": "Krug", "categorie": "luxe", "verdeling": {"dd": 1}}])
+    wine_id = conn.execute("SELECT id FROM wine WHERE naam = 'Krug'").fetchone()["id"]
+    kaart = f'id="klant-{klant_id}" data-compleet='
+
+    assert kaart + '"0"' in client.get("/via/dd").text
+    r = client.post("/toekenning", headers=HTMX, follow_redirects=True,
+                    data={"klant_id": klant_id, "wine_id": wine_id, "delta": "1", "terug": "/via/dd"})
+    assert kaart + '"1"' in r.text
+
+
+def test_klant_zonder_bestelling_is_niet_compleet(client, conn):
+    klant_id = logic.klant_opslaan(conn, None, "dd", "Piet", "", 0, 0, {})
+    assert not logic.klant(conn, klant_id)["compleet"]

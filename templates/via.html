@@ -83,7 +83,7 @@
 {% for k in klanten %}
 {% set vast_open = k.vast_status|selectattr('open', 'gt', 0)|list %}
 {% set luxer_open = k.open.values()|select('gt', 0)|first %}
-<div class="kaart klant" id="klant-{{ k.k.id }}">
+<div class="kaart klant" id="klant-{{ k.k.id }}" data-compleet="{{ 1 if k.compleet else 0 }}">
   <div class="klant-kop">
     <strong>{{ k.k.naam }}</strong>
     {% for x in k.vast_status %}

@@ -207,3 +207,62 @@ document.addEventListener("htmx:afterSwap", (e) => {
   const form = document.querySelector("form[data-bewaak]");
   if (form) delete form.dataset.opslaan;
 });
+
+// Bestelling van een klant helemaal toegekend: ontkurken, bubbels en een melding.
+// Alleen op de kaart waarop getikt is, dus niet bij wijzigingen van iemand anders.
+let geluid;
+let plopBuffer;
+let kaartVoorSwap = null;
+
+// Speelt het geluid uit data-plop; ontbreekt het bestand, dan is het feestje gewoon stil.
+function plop() {
+  plopBuffer.then((buffer) => {
+    if (!buffer) return;
+    const bron = geluid.createBufferSource();
+    bron.buffer = buffer;
+    bron.connect(geluid.destination);
+    bron.start();
+  });
+}
+
+function vier(naam) {
+  const feest = document.createElement("div");
+  feest.className = "feest";
+  for (let i = 0; i < 40; i++) {
+    const bubbel = document.createElement("i");
+    bubbel.style.left = `${Math.random() * 100}%`;
+    bubbel.style.setProperty("--maat", `${6 + Math.random() * 14}px`);
+    bubbel.style.animationDelay = `${Math.random() * 0.9}s`;
+    feest.append(bubbel);
+  }
+  const tekst = document.createElement("div");
+  tekst.className = "feest-tekst";
+  tekst.setAttribute("role", "status");
+  tekst.textContent = `🍾 ${naam} compleet!`;
+  feest.append(tekst);
+  document.body.append(feest);
+  setTimeout(() => feest.remove(), 3000);
+  if (geluid) plop();
+}
+
+// Audio mag alleen starten vanuit een tik; het antwoord van de server komt daarna.
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".klant[data-compleet] button")) return;
+  if (!geluid) {
+    geluid = new AudioContext();
+    plopBuffer = fetch(document.body.dataset.plop)
+      .then((r) => r.arrayBuffer())
+      .then((data) => geluid.decodeAudioData(data))
+      .catch(() => null);
+  }
+  geluid.resume();
+});
+document.addEventListener("htmx:beforeRequest", (e) => {
+  const kaart = e.target.closest(".klant[data-compleet]");
+  kaartVoorSwap = kaart?.dataset.compleet === "0" ? kaart.id : null;
+});
+document.addEventListener("htmx:afterSwap", () => {
+  const kaart = kaartVoorSwap && document.getElementById(kaartVoorSwap);
+  kaartVoorSwap = null;
+  if (kaart?.dataset.compleet === "1") vier(kaart.querySelector("strong").textContent);
+});

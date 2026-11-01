@@ -316,3 +316,32 @@ a.knop.secundair { background: var(--basis); color: var(--tekst); font-weight: 5
 }
 .icoon-knop:hover { background: var(--basis); }
 .klant-kop form { margin: 0; }
+
+/* bestelling compleet: bubbels en melding over de hele pagina */
+.feest { position: fixed; inset: 0; z-index: 20; overflow: hidden; pointer-events: none; }
+.feest i {
+  position: absolute; bottom: -24px; width: var(--maat); height: var(--maat); border-radius: 50%; opacity: 0;
+  border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 25%, transparent);
+  animation: bubbel 2s ease-in forwards;
+}
+.feest-tekst {
+  position: absolute; top: 30%; left: 16px; right: 16px; width: fit-content; max-width: calc(100% - 32px); margin: auto;
+  padding: 12px 20px; border-radius: 12px; background: var(--accent); color: var(--accent-tekst);
+  font-size: 1.3rem; font-weight: 700; text-align: center; box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+  animation: feest-tekst 3s ease-out forwards;
+}
+@keyframes bubbel { 10% { opacity: 1; } 100% { opacity: 0; transform: translateY(-100vh); } }
+@keyframes feest-tekst {
+  0% { opacity: 0; transform: scale(.6); }
+  10% { opacity: 1; transform: scale(1.05); }
+  15% { transform: scale(1); }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .feest i { display: none; }
+  .feest-tekst { animation: none; }
+}
+
+.credit { padding: 16px; color: var(--zacht); font-size: .75rem; text-align: center; }
+.credit a { color: inherit; }

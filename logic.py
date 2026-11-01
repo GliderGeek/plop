@@ -187,6 +187,8 @@ def klanten(conn, via=None, klant_id=None):
         nodig = {"iets_luxer": k["iets_luxer_n"], "luxe": k["luxe_n"]}
         heeft = {c: sum(t["aantal"] for t in tks[k["id"]] if t["categorie"] == c)
                  for c in ZOEK_CATEGORIEEN}
+        open_ = {c: nodig[c] - heeft[c] for c in ZOEK_CATEGORIEEN}
+        totaal = sum(vast[k["id"]].values()) + nodig["iets_luxer"] + nodig["luxe"]
         uit.append({
             "k": k,
             "vast": vast[k["id"]],
@@ -194,8 +196,10 @@ def klanten(conn, via=None, klant_id=None):
             "toekenningen": tks[k["id"]],
             "nodig": nodig,
             "heeft": heeft,
-            "open": {c: nodig[c] - heeft[c] for c in ZOEK_CATEGORIEEN},
-            "totaal": sum(vast[k["id"]].values()) + nodig["iets_luxer"] + nodig["luxe"],
+            "open": open_,
+            "totaal": totaal,
+            "compleet": totaal > 0 and all(s["open"] <= 0 for s in vast_status)
+                        and all(n <= 0 for n in open_.values()),
         })
     return uit
 
