@@ -1,9 +1,12 @@
+import io
 import os
+import re
 import tempfile
 
 # vóór het importeren van app: die opent (en migreert) de database bij het laden
 os.environ["CHAMPAGNE_DB"] = os.path.join(tempfile.mkdtemp(), "test.db")
 
+import openpyxl
 import pytest
 from werkzeug.datastructures import MultiDict
 
@@ -99,6 +102,31 @@ def test_klant_verwijderen_op_via_pagina(client, conn):
 def test_overzicht_toont_bestelde_totalen(client, conn):
     logic.klant_opslaan(conn, None, "dd", "Piet", "", 7, 0, {})
     assert '<td class="nog">7</td>' in client.get("/").text
+
+
+def test_backup_bevat_alle_data(client, conn):
+    klant_id = logic.klant_opslaan(conn, None, "dd", "=1+1", "wens\x0b", 0, 1, {})
+    logic.aankoop_opslaan(conn, None, "Tissier", [{"naam": "Krug", "categorie": "luxe", "prijs": "30",
+                                                   "verdeling": {"dd": 2}}])
+    wine_id = conn.execute("SELECT id FROM wine WHERE naam = 'Krug'").fetchone()["id"]
+    logic.toekenning_wijzig(conn, klant_id, wine_id, 1)
+
+    r = client.get("/backup")
+    assert "attachment" in r.headers["Content-Disposition"]
+    assert re.search(r"champagne-\d{4}-\d{2}-\d{2}-\d{6}\.xlsx", r.headers["Content-Disposition"])
+    wb = openpyxl.load_workbook(io.BytesIO(r.data))
+    assert wb.sheetnames == ["Bestellingen", "Toekenningen", "Aankopen", "Snapshot"]
+    klant = wb["Bestellingen"]["B2"]
+    assert klant.value == "=1+1" and klant.data_type == "s"  # geen formule
+    assert wb["Bestellingen"].cell(2, wb["Bestellingen"].max_column).value == "wens"
+    assert [c.value for c in wb["Toekenningen"][2]] == ["dd", "=1+1", "Krug", "Luxe", 1]
+    kop = [c.value for c in wb["Aankopen"][1]]
+    rij = dict(zip(kop, [c.value for c in wb["Aankopen"][2]]))
+    assert (rij["Omschrijving"], rij["Wijn"], rij["Aantal"], rij["Prijs"], rij["dd"], rij["j"]) == ("Tissier", "Krug", 2, 30, 2, 0)
+
+
+def test_backup_van_lege_database(client):
+    assert client.get("/backup").status_code == 200
 
 
 def test_paginas_renderen(client):

@@ -28,12 +28,15 @@ Er zijn geen rollen of logins: iedereen kan alles.
 |---|---|
 | `app.py` | Routes en htmx-partials |
 | `logic.py` | Alle berekeningen (nog te kopen, pool, toekenningen), aankopen en validatie |
+| `backup.py` | Snapshot van alle data als Excel-bestand |
 | `db.py` | Verbinding, schema aanmaken, migraties, startdata (via's en basisflessen) |
 | `schema.sql` | Databaseschema |
 | `templates/`, `static/` | Pagina's, partials, CSS en een beetje JS voor het aankoopformulier en het feestje als een bestelling compleet is |
 | `tests/` | Unit-tests voor `logic.py` en route-tests voor `app.py` |
 
 Een aankoop (`aankoop`) heeft regels (`aankoop_regel`) met elk een verdeling over de via's (`regel_verdeling`). Wijnen worden niet apart beheerd: een regel verwijst naar een wijn op naam (hoofdletterongevoelig), die automatisch wordt aangemaakt en weer verdwijnt als hij op geen enkele bon meer staat. Overdragen tussen via's past de verdeling van de regels aan (nieuwste eerst) en wordt niet apart opgeslagen. Elke wijziging draait in een transactie (`BEGIN IMMEDIATE`, zodat gelijktijdige acties op elkaar wachten) met een consistentiecheck, die alles terugdraait als een via meer flessen toegekend zou hebben dan hij bezit. Bonnen en klanten hebben een `versie`: wie een bewerkformulier opslaat terwijl iemand anders die bon of klant intussen heeft gewijzigd (ook door een overdracht), krijgt een melding in plaats van andermans wijziging te overschrijven.
+
+De knop *Backup* onderaan het overzicht downloadt een Excel-bestand met tijdstip in de naam, met tabbladen voor bestellingen, toekenningen en aankopen. Dat is een leesbare momentopname; de app kan het bestand niet terugzetten.
 
 Schemawijzigingen voor bestaande databases staan als kleine migraties in `db.py` en draaien automatisch bij het starten.
 

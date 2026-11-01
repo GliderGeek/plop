@@ -1,10 +1,13 @@
 import os
 import re
+from datetime import datetime
+from io import BytesIO
 
 from flask import (Flask, flash, g, make_response, redirect, render_template,
-                   request, url_for)
+                   request, send_file, url_for)
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+import backup as backup_module
 import db
 import logic
 from logic import CATEGORIEEN, ZOEK_CATEGORIEEN, ValidatieFout
@@ -90,6 +93,14 @@ def overzicht():
     conn = get_conn()
     return render_template("overzicht.html", ov=logic.overzicht(conn),
                            totalen=logic.bestel_totalen(conn))
+
+
+@app.get("/backup")
+def backup():
+    nu = datetime.now()
+    return send_file(BytesIO(backup_module.werkboek(get_conn(), nu)), as_attachment=True,
+                     download_name=f"champagne-{nu:%Y-%m-%d-%H%M%S}.xlsx",
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
 # --- klanten -----------------------------------------------------------------
