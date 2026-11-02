@@ -25,6 +25,7 @@ Er zijn geen rollen of logins: iedereen kan alles.
 - export maken van alle huidige data + mogelijkheid inladen in prod
 - toevoegen ww / andere beveiliging gegevens
 - site op domeinnaam + https
+- lijstje via's configureerbaar maken
 
 ## Techniek
 
