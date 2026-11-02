@@ -35,9 +35,10 @@ def werkboek(conn, tijdstip):
     wb = Workbook()
     wb.remove(wb.active)
     _tabblad(wb, "Bestellingen",
-             ["Via", "Voor wie", *(w["naam"] for w in vaste), "Iets luxer", "Luxe", "Totaal", "Aantekening"],
+             ["Via", "Voor wie", *(w["naam"] for w in vaste), "Iets luxer", "Luxe", "Totaal", "Aantekening", "Betaald"],
              ([k["k"]["via"], k["k"]["naam"], *(k["vast"].get(w["id"], 0) for w in vaste),
-               k["nodig"]["iets_luxer"], k["nodig"]["luxe"], k["totaal"], k["k"]["aantekening"]]
+               k["nodig"]["iets_luxer"], k["nodig"]["luxe"], k["totaal"], k["k"]["aantekening"],
+               "ja" if k["k"]["betaald"] else "nee"]
               for k in klanten))
     _tabblad(wb, "Toekenningen", ["Via", "Voor wie", "Wijn", "Categorie", "Aantal"],
              ([k["k"]["via"], k["k"]["naam"], t["naam"], CATEGORIEEN[t["categorie"]], t["aantal"]]
@@ -49,10 +50,12 @@ def werkboek(conn, tijdstip):
                *(x["verdeling"].get(via, 0) for via in vias)]
               for b in logic.aankopen(conn) for x in b["regels"]))
     vr = logic.verrekening(conn)
-    _tabblad(wb, "Kosten", ["Omschrijving", "Bedrag", "Betaald door", "Verdeling"],
-             ([p["k"]["omschrijving"], p["k"]["bedrag"], p["k"]["betaald_door"], logic.KOSTEN_VERDELINGEN[p["k"]["verdeling"]]] for p in vr["kosten"]))
-    _tabblad(wb, "Verrekening", ["Via", "Champagne", "Reiskosten", "Eigen kosten", "Te betalen", "Betaald", "Saldo"],
-             ([r["via"]["code"], *(r[s] / 100 for s in ("wijn", "kosten", "eigen", "te_betalen", "betaald", "saldo"))]
+    _tabblad(wb, "Kosten", ["Omschrijving", "Bedrag", "Betaald door", "Categorie", "Deelnemers"],
+             ([p["k"]["omschrijving"], p["k"]["bedrag"], p["k"]["betaald_door"], logic.KOSTEN_VERDELINGEN[p["k"]["verdeling"]],
+               ", ".join(p["deelnemers"])] for p in vr["kosten"]))
+    _tabblad(wb, "Verrekening", ["Via", "Champagne", "Reiskosten", "Eigen kosten", "Te betalen", "Betaald", "Saldo", "Verrekend"],
+             ([r["via"]["code"], *(r[s] / 100 for s in ("wijn", "kosten", "eigen", "te_betalen", "betaald", "saldo")),
+               "ja" if r["via"]["verrekend"] else "nee"]
               for r in vr["per_via"]))
     _tabblad(wb, "Snapshot", ["Gemaakt op"], [[tijdstip.strftime("%Y-%m-%d %H:%M:%S")]])
 

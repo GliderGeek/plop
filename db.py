@@ -5,6 +5,7 @@ from pathlib import Path
 SCHEMA = Path(__file__).with_name("schema.sql")
 
 VIAS = [("dd", "dd"), ("j", "j"), ("h", "h"), ("m", "m"), ("hm", "hm")]
+PERSONEN = ["dd", "j", "h", "m"]  # hm is de gezamenlijke bestelling van h en m, geen persoon; alleen nog voor de migratie
 
 VASTE_WIJNEN = [
     ("Pertois tradition", "basis", 19.3),
@@ -26,7 +27,10 @@ def init(conn):
     _migreer_naar_regels(conn)
     _voeg_versie_toe(conn)
     _voeg_betaler_toe(conn)
+    _voeg_klant_betaald_toe(conn)
+    _voeg_via_verrekend_toe(conn)
     _voeg_kostenverdeling_toe(conn)
+    _vul_kostendeelnemers(conn)
     with tx(conn):
         # categorie 'klein' (halve flessen) bestaat niet meer: valt onder basis
         conn.execute("UPDATE wine SET categorie = 'basis' WHERE categorie = 'klein'")
@@ -68,11 +72,33 @@ def _voeg_betaler_toe(conn):
         conn.execute("ALTER TABLE aankoop ADD COLUMN betaald_door TEXT REFERENCES via(code)")
 
 
+def _voeg_klant_betaald_toe(conn):
+    """Of een besteller zijn rekening aan de via betaald heeft."""
+    if "betaald" not in _kolommen(conn, "klant"):
+        conn.execute("ALTER TABLE klant ADD COLUMN betaald INTEGER NOT NULL DEFAULT 0")
+
+
+def _voeg_via_verrekend_toe(conn):
+    """Of een via zijn saldo met de anderen verrekend heeft."""
+    if "verrekend" not in _kolommen(conn, "via"):
+        conn.execute("ALTER TABLE via ADD COLUMN verrekend INTEGER NOT NULL DEFAULT 0")
+
+
 def _voeg_kostenverdeling_toe(conn):
     """Over wie overige aankopen verdeeld worden; bestaande posten blijven bij de bestellers."""
     if "verdeling" not in _kolommen(conn, "kosten"):
         conn.execute("""ALTER TABLE kosten ADD COLUMN verdeling TEXT NOT NULL DEFAULT 'bestellers'
                         CHECK (verdeling IN ('bestellers', 'personen'))""")
+
+
+def _vul_kostendeelnemers(conn):
+    """Eigen kosten van vóór de deelnemers: daar deed iedereen aan mee."""
+    posten = conn.execute(
+        """SELECT id FROM kosten WHERE verdeling = 'personen'
+           AND id NOT IN (SELECT kosten_id FROM kosten_deelnemer)"""
+    ).fetchall()
+    conn.executemany("INSERT INTO kosten_deelnemer (kosten_id, via) VALUES (?, ?)",
+                     [(r["id"], p) for r in posten for p in PERSONEN])
 
 
 def _migreer_naar_regels(conn):

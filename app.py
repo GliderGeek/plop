@@ -219,6 +219,18 @@ def via(code):
                            bedragen=logic.klant_bedragen(conn, code))
 
 
+@app.post("/klant/<int:klant_id>/betaald")
+def klant_betaald(klant_id):
+    logic.klant_betaald(get_conn(), klant_id, request.form.get("betaald"))
+    return terug(url_for("overzicht"))
+
+
+@app.post("/via/<code>/verrekend")
+def via_verrekend(code):
+    logic.via_verrekend(get_conn(), code, request.form.get("verrekend"))
+    return terug(url_for("overzicht"))
+
+
 @app.post("/toekenning")
 def toekenning():
     f = request.form
@@ -244,7 +256,7 @@ def overdracht():
 def kosten_opslaan(kosten_id=None):
     f = request.form
     logic.kosten_opslaan(get_conn(), kosten_id, f.get("omschrijving"), f.get("bedrag"),
-                         f.get("betaald_door"), f.get("versie"), f.get("verdeling"))
+                         f.get("betaald_door"), f.get("versie"), f.get("verdeling"), f.getlist("deelnemers"))
     return redirect(url_for("aankopen", _anchor="vaste-kosten"), code=303)
 
 

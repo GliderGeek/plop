@@ -453,12 +453,19 @@ def test_klantbedragen_tellen_op_tot_via_totaal(conn):
         assert sum(r[veld] for r in b["rijen"]) + b["vrij"][veld] == b["stand"][totaal]
 
 
-def test_klant_met_wijn_zonder_prijs_is_gemarkeerd(conn):
-    piet = logic.klant_opslaan(conn, None, "dd", "Piet", "", 0, 1, {})
-    logic.aankoop_opslaan(conn, None, "A", [regel("Krug", {"dd": 1}, "luxe")])
-    logic.toekenning_wijzig(conn, piet, wijn_id(conn, "Krug"), 1)
-    b = logic.klant_bedragen(conn, "dd")
-    assert b["rijen"][0]["geen_prijs"] and b["zonder_prijs"] == 1 and b["rijen"][0]["totaal"] == 0
+def test_ontbrekende_prijs_of_bedrag_houdt_klantbedragen_tegen(conn):
+    logic.aankoop_opslaan(conn, None, "A", [regel("Krug", {"j": 1}, "luxe")], betaald_door="j")
+    assert [w["tekst"] for w in logic.klant_bedragen(conn, "dd")["ontbreekt"]] == ["A: 1 zonder prijs"]  # ook bij andere via
+    conn.execute("UPDATE aankoop_regel SET prijs = 20")
+    assert logic.klant_bedragen(conn, "dd")["ontbreekt"] == []
+    logic.kosten_opslaan(conn, None, "Tank", "", "j")
+    assert [w["tekst"] for w in logic.klant_bedragen(conn, "dd")["ontbreekt"]] == ["Tank: bedrag ontbreekt"]
+
+
+def test_ontbrekende_betaler_houdt_klantbedragen_niet_tegen(conn):
+    logic.aankoop_opslaan(conn, None, "A", [regel("Krug", {"dd": 1}, "luxe", "20")])
+    assert logic.klant_bedragen(conn, "dd")["ontbreekt"] == []
+    assert logic.verrekening(conn)["waarschuwingen"]
 
 
 @pytest.mark.parametrize("waarde", ["nan", "inf", "-1", "abc"])
@@ -472,14 +479,14 @@ def test_ongeldige_bedragen_geweigerd(conn, waarde):
 def test_kosten_alleen_over_de_vias_gelijk_en_niet_doorberekend(conn):
     logic.klant_opslaan(conn, None, "hm", "Piet", "", 0, 1, {})
     logic.aankoop_opslaan(conn, None, "T", [regel("Krug", {"hm": 1}, "luxe", "10")], betaald_door="hm")
-    logic.kosten_opslaan(conn, None, "Hotel", "100,01", "dd", verdeling="personen")
+    logic.kosten_opslaan(conn, None, "Hotel", "100,01", "dd", verdeling="personen", deelnemers=db.PERSONEN)
     vr = logic.verrekening(conn)
     assert [stand(vr, v)["eigen"] for v in ("dd", "j", "h", "m", "hm")] == [2501, 2500, 2500, 2500, 0]
     assert stand(vr, "dd")["saldo"] == 10001 - 2501 and stand(vr, "j")["saldo"] == -2500
     assert stand(vr, "hm")["saldo"] == 0 and sluit(vr) == 0
     assert logic.klant_bedragen(conn, "hm")["vrij"]["totaal"] == 1000
 
-    logic.kosten_opslaan(conn, None, "Tank", "50", "j", verdeling="personen")
+    logic.kosten_opslaan(conn, None, "Tank", "50", "j", verdeling="personen", deelnemers=db.PERSONEN)
     logic.kosten_opslaan(conn, None, "Diesel", "20", "j")
     b = logic.klant_bedragen(conn, "hm")
     assert b["vrij"]["kosten"] == 2000  # alleen Diesel; hm heeft alle wijn
@@ -488,3 +495,36 @@ def test_kosten_alleen_over_de_vias_gelijk_en_niet_doorberekend(conn):
 def test_onbekende_kostenverdeling_geweigerd(conn):
     with pytest.raises(ValidatieFout):
         logic.kosten_opslaan(conn, None, "Hotel", "1", "dd", verdeling="iedereen")
+
+
+def test_eigen_kosten_alleen_over_de_deelnemers(conn):
+    hotel = logic.kosten_opslaan(conn, None, "Hotel", "30", "dd", verdeling="personen", deelnemers=["j", "dd"])
+    logic.kosten_opslaan(conn, None, "Diner", "5", "dd", verdeling="personen", deelnemers=["dd", "j", "h", "m", "hm"])
+    vr = logic.verrekening(conn)
+    assert [stand(vr, v)["eigen"] for v in ("dd", "j", "h", "m", "hm")] == [1600, 1600, 100, 100, 100]
+    assert sluit(vr) == 0
+    assert logic.kosten(conn, hotel)[0]["deelnemers"] == ["dd", "j"]
+
+    logic.kosten_opslaan(conn, hotel, "Hotel", "30", "dd", verdeling="bestellers", deelnemers=["j"])
+    assert logic.kosten(conn, hotel)[0]["deelnemers"] == []
+
+
+@pytest.mark.parametrize("deelnemers", [[], ["zz"]])
+def test_eigen_kosten_vragen_geldige_deelnemers(conn, deelnemers):
+    with pytest.raises(ValidatieFout):
+        logic.kosten_opslaan(conn, None, "Hotel", "1", "dd", verdeling="personen", deelnemers=deelnemers)
+
+
+def test_bestaande_eigen_kosten_krijgen_iedereen_als_deelnemer(conn):
+    conn.execute("INSERT INTO kosten (omschrijving, bedrag, betaald_door, verdeling) VALUES ('Hotel', 8, 'dd', 'personen')")
+    db.init(conn)
+    db.init(conn)
+    assert logic.kosten(conn)[0]["deelnemers"] == db.PERSONEN
+
+
+def test_namen_sorteren_hoofdletterongevoelig(conn):
+    for naam in ("Sandra", "lotje", "Ravi"):
+        logic.klant_opslaan(conn, None, "dd", naam, "", 0, 1, {})
+    logic.aankoop_opslaan(conn, None, "A", [regel("Zoemer", {"dd": 1}), regel("appel", {"dd": 1})])
+    assert [k["k"]["naam"] for k in logic.klanten(conn, "dd")] == ["lotje", "Ravi", "Sandra"]
+    assert [w["naam"] for w in logic.wijnen(conn, vast=False)] == ["appel", "Zoemer"]

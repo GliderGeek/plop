@@ -1,12 +1,9 @@
-{% from "partials/bedrag.html" import bedrag %}
+{% from "partials/waarschuwing_links.html" import waarschuwing_links with context %}
 {% if vr.waarschuwingen or vr.onbekende_betaler or vr.onverdeeld %}
 <div class="kaart">
   <p class="waarschuwing-tekst">Nog niet compleet: de standen zijn voorlopig.</p>
   <ul class="waarschuwingen">
-    {% for w in vr.waarschuwingen %}
-    <li>{% if w.aankoop_id %}<a href="{{ url_for('aankoop_bewerk', aankoop_id=w.aankoop_id) }}">{{ w.tekst }}</a>
-        {% else %}<a href="{{ url_for('aankopen', _anchor='vaste-kosten') }}">{{ w.tekst }}</a>{% endif %}</li>
-    {% endfor %}
+    {{ waarschuwing_links(vr.waarschuwingen) }}
     {% if vr.onbekende_betaler %}<li>{{ vr.onbekende_betaler|cent }} is uitgegeven, maar nog niet bij een betaler ingevuld.</li>{% endif %}
     {% if vr.onverdeeld %}<li>{{ vr.onverdeeld|cent }} aan overige aankopen voor alle bestellers telt nog niet mee: dat wordt verdeeld op basis van de wijnprijzen, en die zijn nog niet ingevuld.</li>{% endif %}
   </ul>
@@ -16,21 +13,26 @@
 <div class="kaart tabel-kaart">
   <div class="tabel-scroll">
     <table class="overzicht">
-      <thead><tr><th>Via</th><th>Champagne</th><th>Reiskosten</th><th>Eigen kosten</th><th>Te betalen</th><th>Betaald</th><th>Saldo</th></tr></thead>
+      <thead><tr><th>Via</th><th>Champagne</th><th>Reiskosten</th><th>Eigen kosten</th><th>Te betalen</th><th>Betaald</th><th>Saldo</th><th>Verrekend</th></tr></thead>
       <tbody>
         {% for r in vr.per_via %}
         <tr>
           <th><a href="{{ url_for('via', code=r.via.code) }}">{{ r.via.code }}</a></th>
-          <td>{{ bedrag(r.wijn, r.geen_prijs) }}</td><td>{{ bedrag(r.kosten, r.geen_prijs) }}</td><td>{{ r.eigen|cent }}</td>
-          <td>{{ bedrag(r.te_betalen, r.geen_prijs) }}</td><td>{{ bedrag(r.betaald, r.betaald_onbekend) }}</td>
-          <td class="nog">{{ bedrag(r.saldo, r.geen_prijs or r.betaald_onbekend, teken='±') }}</td>
+          <td>{{ r.wijn|cent }}</td><td>{{ r.kosten|cent }}</td><td>{{ r.eigen|cent }}</td>
+          <td>{{ r.te_betalen|cent }}</td><td>{{ r.betaald|cent }}</td>
+          <td class="nog">{{ r.saldo|cent }}</td>
+          <td>
+            <form hx-post="{{ url_for('via_verrekend', code=r.via.code) }}" hx-trigger="change" hx-target="#verrekening" hx-select="#verrekening" hx-swap="outerHTML">
+              <input type="checkbox" name="verrekend" value="1" {{ 'checked' if r.via.verrekend }} aria-label="{{ r.via.code }} is verrekend">
+            </form>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
       <tfoot>
-        <tr><th>Samen</th>{% set t = vr.totaal %}<td>{{ bedrag(t.wijn, t.geen_prijs) }}</td><td>{{ bedrag(t.kosten, t.geen_prijs) }}</td><td>{{ t.eigen|cent }}</td><td>{{ bedrag(t.te_betalen, t.geen_prijs) }}</td><td>{{ bedrag(t.betaald, t.betaald_onbekend) }}</td><td></td></tr>
+        <tr><th>Samen</th>{% set t = vr.totaal %}<td>{{ t.wijn|cent }}</td><td>{{ t.kosten|cent }}</td><td>{{ t.eigen|cent }}</td><td>{{ t.te_betalen|cent }}</td><td>{{ t.betaald|cent }}</td><td></td><td></td></tr>
       </tfoot>
     </table>
   </div>
 </div>
-<p class="uitleg">Saldo positief: krijgt geld terug. Negatief: moet nog betalen. Een vraagteken betekent dat er nog een prijs ontbreekt. Eigen kosten worden niet doorberekend aan de bestellingen.</p>
+<p class="uitleg">Saldo positief: krijgt geld terug. Negatief: moet nog betalen. Eigen kosten worden niet doorberekend aan de bestellingen.</p>

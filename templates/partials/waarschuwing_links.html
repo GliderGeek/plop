@@ -1,0 +1,6 @@
+{% macro waarschuwing_links(waarschuwingen) %}
+{% for w in waarschuwingen %}
+<li>{% if w.aankoop_id %}<a href="{{ url_for('aankoop_bewerk', aankoop_id=w.aankoop_id) }}">{{ w.tekst }}</a>
+    {% else %}<a href="{{ url_for('aankopen', _anchor='vaste-kosten') }}">{{ w.tekst }}</a>{% endif %}</li>
+{% endfor %}
+{% endmacro %}

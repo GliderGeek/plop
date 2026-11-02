@@ -1,2 +1,0 @@
-{# prijs (deels) onbekend: geen € 0,00 tonen, dat oogt als een definitief bedrag #}
-{% macro bedrag(c, onbekend, leeg='?', teken='+') %}{% if not onbekend %}{{ c|cent }}{% elif c %}{{ c|cent }} {{ teken }} ?{% else %}{{ leeg }}{% endif %}{% endmacro %}

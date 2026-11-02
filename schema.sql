@@ -3,7 +3,8 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS via (
     code TEXT PRIMARY KEY,
     naam TEXT NOT NULL,
-    volgorde INTEGER NOT NULL DEFAULT 0
+    volgorde INTEGER NOT NULL DEFAULT 0,
+    verrekend INTEGER NOT NULL DEFAULT 0  -- de via heeft zijn saldo verrekend
 );
 
 -- categorie: basis | iets_luxer | luxe
@@ -26,7 +27,8 @@ CREATE TABLE IF NOT EXISTS klant (
     aantekening TEXT NOT NULL DEFAULT '',
     iets_luxer_n INTEGER NOT NULL DEFAULT 0 CHECK (iets_luxer_n >= 0),
     luxe_n INTEGER NOT NULL DEFAULT 0 CHECK (luxe_n >= 0),
-    versie INTEGER NOT NULL DEFAULT 0  -- tegen het overschrijven van andermans wijziging
+    versie INTEGER NOT NULL DEFAULT 0,  -- tegen het overschrijven van andermans wijziging
+    betaald INTEGER NOT NULL DEFAULT 0  -- heeft de rekening aan de via betaald
 );
 
 -- bestelling van vaste basisflessen per klant
@@ -76,8 +78,16 @@ CREATE TABLE IF NOT EXISTS kosten (
     omschrijving TEXT NOT NULL,
     bedrag REAL,
     betaald_door TEXT REFERENCES via(code),
-    -- bestellers: naar rato van de wijn, doorberekend aan de bestellingen; personen: gelijk over de vier
+    -- bestellers (reiskosten): naar rato van de wijn, doorberekend aan de bestellingen;
+    -- personen (eigen kosten): gelijk over de deelnemers
     verdeling TEXT NOT NULL DEFAULT 'bestellers' CHECK (verdeling IN ('bestellers', 'personen')),
     aangemaakt_op TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     versie INTEGER NOT NULL DEFAULT 0  -- tegen het overschrijven van andermans wijziging
+);
+
+-- wie meedoet aan eigen kosten
+CREATE TABLE IF NOT EXISTS kosten_deelnemer (
+    kosten_id INTEGER NOT NULL REFERENCES kosten(id) ON DELETE CASCADE,
+    via TEXT NOT NULL REFERENCES via(code),
+    PRIMARY KEY (kosten_id, via)
 );

@@ -1,6 +1,6 @@
 {% from "partials/iconen.html" import icoon %}
 
-{% macro kosten_velden(k=None) %}
+{% macro kosten_velden(k=None, deelnemers=()) %}
   {% if k %}<input type="hidden" name="versie" value="{{ k.versie }}">{% endif %}
   <div class="rij">
     <label class="breed">Omschrijving
@@ -19,11 +19,21 @@
     </label>
   </div>
   <div class="rij">
-    <label class="breed">Verdelen over
+    <label class="breed">Categorie
       <select name="verdeling">
         {% for code, naam in KOSTEN_VERDELINGEN.items() %}<option value="{{ code }}" {{ 'selected' if k and k.verdeling == code }}>{{ naam }}</option>{% endfor %}
       </select>
     </label>
+  </div>
+  {# alleen zichtbaar bij eigen kosten, zie style.css #}
+  <div class="deelnemers">
+    <div class="deelnemers-kop">
+      <span>Wie doet mee</span>
+      <button type="button" class="link" onclick="this.form.querySelectorAll('[name=deelnemers]').forEach((c) => (c.checked = true))">alle selecteren</button>
+    </div>
+    <div class="deelnemers-keuze">
+      {% for v in alle_vias %}<label><input type="checkbox" name="deelnemers" value="{{ v.code }}" {{ 'checked' if v.code in deelnemers }}> {{ v.code }}</label>{% endfor %}
+    </div>
   </div>
 {% endmacro %}
 
@@ -35,6 +45,7 @@
     {% if k.bedrag is not none %}<span class="klein-tekst">{{ k.bedrag|euro }}</span>{% endif %}
     {% if k.betaald_door %}<span class="klein-tekst">betaald door {{ k.betaald_door }}</span>{% endif %}
     <span class="chip">{{ KOSTEN_VERDELINGEN[k.verdeling] }}</span>
+    {% if p.deelnemers %}<span class="klein-tekst">{{ p.deelnemers|join(', ') }}</span>{% endif %}
     <button type="button" class="icoon-knop" popovertarget="bewerk-kosten-{{ k.id }}" title="Bewerken" aria-label="Bewerken">{{ icoon('pen') }}</button>
     <form method="post" action="{{ url_for('kosten_verwijder', kosten_id=k.id) }}" hx-confirm="{{ k.omschrijving }} verwijderen?">
       <button class="icoon-knop gevaar-tekst" title="Verwijderen" aria-label="Verwijderen">{{ icoon('prullenbak') }}</button>
@@ -45,7 +56,7 @@
 <div popover id="bewerk-kosten-{{ k.id }}" class="popup">
   <h3>{{ k.omschrijving }} bewerken</h3>
   <form method="post" action="{{ url_for('kosten_opslaan', kosten_id=k.id) }}">
-    {{ kosten_velden(k) }}
+    {{ kosten_velden(k, p.deelnemers) }}
     <div class="knoppen">
       <button type="submit">Opslaan</button>
       <button type="button" class="secundair" popovertarget="bewerk-kosten-{{ k.id }}" popovertargetaction="hide" onclick="this.form.reset()">Annuleer</button>

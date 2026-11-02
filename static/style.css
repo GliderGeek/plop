@@ -126,6 +126,12 @@ input, select, textarea {
 .rij > label.breed { flex: 3 1 180px; }
 .rij.aantallen { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }  /* gelijke breedtes, ook na afbreken */
 fieldset { border: 1px solid var(--rand); border-radius: 8px; margin: 0 0 8px; }
+form:has(option[value=bestellers]:checked) .deelnemers { display: none; }
+.deelnemers-kop { display: flex; justify-content: space-between; align-items: baseline; font-size: .85rem; color: var(--zacht); }
+.deelnemers-kop .link { font-size: .85rem; text-decoration: underline; }
+.deelnemers-keuze { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 8px; }
+.deelnemers-keuze label { flex-direction: row; align-items: center; gap: 6px; margin: 0; font-size: 1rem; color: var(--tekst); }
+.deelnemers-keuze input, .overzicht input[type=checkbox] { width: 20px; height: 20px; padding: 0; }
 button {
   padding: 8px 16px; border: 0; border-radius: 8px; cursor: pointer;
   background: var(--accent); color: var(--accent-tekst); font-weight: 600; min-height: 40px;

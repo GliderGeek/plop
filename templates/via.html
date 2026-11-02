@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% from "partials/bedrag.html" import bedrag %}
 {% from "partials/fles.html" import fles %}
 {% from "partials/iconen.html" import icoon %}
 {% from "partials/klant_velden.html" import klant_velden with context %}
+{% from "partials/waarschuwing_links.html" import waarschuwing_links with context %}
 {% block main %}
 <div id="via-body">
 <h1>Via {{ v.code }}</h1>
@@ -173,15 +173,19 @@
 <p class="uitleg">Nog geen bestellingen via {{ v.code }}.</p>
 {% endfor %}
 
-{% macro bedrag_cellen(wijn, kosten, totaal, onbekend) %}
-<td>{{ bedrag(wijn, onbekend) }}</td><td>{{ bedrag(kosten, onbekend) }}</td><td class="nog">{{ bedrag(totaal, onbekend, 'prijs ontbreekt') }}</td>
-{% endmacro %}
 <h2>In rekening brengen</h2>
-{% if bedragen.open_punten %}<p class="waarschuwing-tekst"><a href="{{ url_for('overzicht', _anchor='verrekening') }}">Voorlopig: {{ bedragen.open_punten }} {{ 'punt' if bedragen.open_punten == 1 else 'punten' }} in de verrekening nog niet compleet</a></p>{% endif %}
+{% if bedragen.ontbreekt %}
+<div class="kaart">
+  <p class="waarschuwing-tekst">Bedragen volgen zodra alles is ingevuld:</p>
+  <ul class="waarschuwingen">
+    {{ waarschuwing_links(bedragen.ontbreekt) }}
+  </ul>
+</div>
+{% else %}
 <div class="kaart tabel-kaart">
   <div class="tabel-scroll">
     <table class="overzicht">
-      <thead><tr><th>Voor wie</th><th>Flessen</th><th>Champagne</th><th>Reiskosten</th><th>Totaal</th></tr></thead>
+      <thead><tr><th>Voor wie</th><th>Flessen</th><th>Champagne</th><th>Reiskosten</th><th>Totaal</th><th>Betaald</th></tr></thead>
       <tbody>
         {% for r in bedragen.rijen %}
         <tr>
@@ -189,24 +193,30 @@
             {% if r.open %}<span class="rij-noot">nog {{ r.open }} {{ 'fles' if r.open == 1 else 'flessen' }} open</span>{% endif %}
           </th>
           <td>{{ r.flessen }}</td>
-          {% if r.flessen %}{{ bedrag_cellen(r.wijn, r.kosten, r.totaal, r.geen_prijs) }}
-          {% else %}<td>–</td><td>–</td><td class="nog">–</td>{% endif %}
+          <td>{{ r.wijn|cent }}</td><td>{{ r.kosten|cent }}</td><td class="nog">{{ r.totaal|cent }}</td>
+          <td>
+            <form {{ post_attrs(url_for('klant_betaald', klant_id=r.k.id)) }} hx-trigger="change">
+              <input type="hidden" name="terug" value="{{ terug }}">
+              <input type="checkbox" name="betaald" value="1" {{ 'checked' if r.k.betaald }} aria-label="{{ r.k.naam }} heeft betaald">
+            </form>
+          </td>
         </tr>
         {% endfor %}
         {% if bedragen.vrij.flessen %}{% set r = bedragen.vrij %}
         <tr>
           <th>Nog niet toegekend</th>
           <td>{{ r.flessen }}</td>
-          {{ bedrag_cellen(r.wijn, r.kosten, r.totaal, r.geen_prijs) }}
+          <td>{{ r.wijn|cent }}</td><td>{{ r.kosten|cent }}</td><td class="nog">{{ r.totaal|cent }}</td><td></td>
         </tr>
         {% endif %}
       </tbody>
       <tfoot>{% set s = bedragen.stand %}
-        <tr><th>Via {{ v.code }}</th><td></td>{{ bedrag_cellen(s.wijn, s.kosten, s.doorberekend, bedragen.zonder_prijs) }}</tr>
+        <tr><th>Via {{ v.code }}</th><td></td><td>{{ s.wijn|cent }}</td><td>{{ s.kosten|cent }}</td><td class="nog">{{ s.doorberekend|cent }}</td><td></td></tr>
       </tfoot>
     </table>
   </div>
 </div>
+{% endif %}
 </div>
 
 {# buiten #via-body: blijft open staan, zodat je meteen de volgende bestelling kunt invoeren #}

@@ -130,7 +130,7 @@ def test_backup_bevat_alle_data(client, conn):
     assert wb.sheetnames == ["Bestellingen", "Toekenningen", "Aankopen", "Kosten", "Verrekening", "Snapshot"]
     klant = wb["Bestellingen"]["B2"]
     assert klant.value == "=1+1" and klant.data_type == "s"  # geen formule
-    assert wb["Bestellingen"].cell(2, wb["Bestellingen"].max_column).value == "wens"
+    assert [c.value for c in wb["Bestellingen"][2]][-2:] == ["wens", "nee"]
     assert [c.value for c in wb["Toekenningen"][2]] == ["dd", "=1+1", "Krug", "Luxe", 1]
     kop = [c.value for c in wb["Aankopen"][1]]
     rij = dict(zip(kop, [c.value for c in wb["Aankopen"][2]]))
@@ -191,9 +191,12 @@ def test_kosten_toevoegen_bewerken_verwijderen(client, conn):
     assert r.headers["HX-Retarget"] == "#melding" and "intussen gewijzigd" in r.text
 
     client.post(f"/kosten/{k['id']}", data={"omschrijving": "Tank", "bedrag": "40,5", "betaald_door": "h",
-                                            "verdeling": "personen", "versie": k["versie"]})
+                                            "verdeling": "personen", "deelnemers": ["dd", "m"], "versie": k["versie"]})
     k = logic.kosten(conn)[0]["k"]
     assert (k["bedrag"], k["betaald_door"], k["verdeling"]) == (40.5, "h", "personen")
+    assert logic.kosten(conn)[0]["deelnemers"] == ["dd", "m"]
+    tekst = client.get("/aankopen").text
+    assert 'value="dd" checked' in tekst and 'value="j" >' in tekst and "alle selecteren" in tekst
 
     client.post(f"/kosten/{k['id']}/verwijder")
     assert not logic.kosten(conn)
@@ -215,23 +218,58 @@ def test_via_pagina_toont_bedrag_per_bestelling(client, conn):
     assert "nog 1 fles open" in tekst
 
 
-def test_via_pagina_toont_geen_nul_bij_ontbrekende_prijs(client, conn):
-    piet = logic.klant_opslaan(conn, None, "dd", "Piet", "", 0, 2, {})
+def test_via_pagina_toont_geen_bedragen_bij_ontbrekende_prijs(client, conn):
     logic.klant_opslaan(conn, None, "dd", "Jan", "", 0, 2, {})
-    logic.aankoop_opslaan(conn, None, "", [{"naam": "Krug", "categorie": "luxe", "verdeling": {"dd": 2}},
-                                           {"naam": "Ruinart", "categorie": "luxe", "prijs": "30", "verdeling": {"dd": 1}}])
-    krug = conn.execute("SELECT id FROM wine WHERE naam = 'Krug'").fetchone()["id"]
-    logic.toekenning_wijzig(conn, piet, krug, 1)
+    aankoop = logic.aankoop_opslaan(conn, None, "Bon", [{"naam": "Krug", "categorie": "luxe", "verdeling": {"dd": 2}}])
     tekst = client.get("/via/dd").text
-    assert "prijs ontbreekt" in tekst and "€ 30,00 + ?" in tekst  # Piet; de rij Nog niet toegekend en het via-totaal
-    assert "<td>–</td>" in tekst  # Jan heeft nog niets toegekend
+    assert "Bedragen volgen zodra alles is ingevuld" in tekst and f"/aankoop/{aankoop}/bewerk" in tekst
+    assert "<th>Reiskosten</th>" not in tekst
 
 
-def test_verrekening_toont_onbekende_bedragen_als_vraagteken(client, conn):
+def test_via_pagina_toont_nul_bij_klant_zonder_flessen(client, conn):
+    logic.klant_opslaan(conn, None, "dd", "Jan", "", 0, 2, {})
+    logic.aankoop_opslaan(conn, None, "", [{"naam": "Krug", "categorie": "luxe", "prijs": "30", "verdeling": {"dd": 2}}])
+    tekst = client.get("/via/dd").text
+    assert "<td>€ 0,00</td>" in tekst and "Bedragen volgen" not in tekst
+
+
+def test_verrekening_is_voorlopig_bij_ontbrekende_prijs(client, conn):
     logic.aankoop_opslaan(conn, None, "", [{"naam": "Krug", "categorie": "luxe", "prijs": "20", "verdeling": {"m": 1}},
                                            {"naam": "Ruinart", "categorie": "luxe", "verdeling": {"dd": 1, "m": 1}}],
                           betaald_door="h")
     tekst = client.get("/").text
-    assert "<td>€ 20,00 + ?</td>" in tekst  # champagne van m en betaald door h
-    assert "<td>?</td>" in tekst  # champagne van dd
-    assert "€ -20,00 ± ?" in tekst and "€ 20,00 ± ?" in tekst
+    assert "de standen zijn voorlopig" in tekst and "1 zonder prijs" in tekst
+    assert "<td>€ 20,00</td>" in tekst and " ?" not in tekst.split("Saldo positief")[0].split("</thead>")[-1]
+
+
+def test_betaald_afvinken(client, conn):
+    jan = logic.klant_opslaan(conn, None, "dd", "Jan", "", 0, 2, {})
+    logic.aankoop_opslaan(conn, None, "", [{"naam": "Krug", "categorie": "luxe", "prijs": "30", "verdeling": {"dd": 2}}])
+    assert "Jan heeft betaald" in client.get("/via/dd").text
+    versie = logic.klant(conn, jan)["k"]["versie"]
+
+    client.post(f"/klant/{jan}/betaald", data={"betaald": "1", "terug": "/via/dd"})
+    k = logic.klant(conn, jan)["k"]
+    assert k["betaald"] == 1 and k["versie"] == versie
+    assert 'value="1" checked aria-label="Jan heeft betaald"' in client.get("/via/dd").text
+
+    client.post(f"/klant/{jan}/betaald", data={"terug": "/via/dd"})
+    assert logic.klant(conn, jan)["k"]["betaald"] == 0
+
+
+def test_betaald_voor_verwijderde_klant_geeft_melding(client):
+    r = client.post("/klant/999/betaald", headers=HTMX, data={"betaald": "1"})
+    assert "bestaat niet" in r.text
+
+
+def test_verrekend_afvinken(client, conn):
+    assert 'value="1"  aria-label="dd is verrekend"' in client.get("/").text
+    client.post("/via/dd/verrekend", data={"verrekend": "1"})
+    assert 'value="1" checked aria-label="dd is verrekend"' in client.get("/").text
+    assert 'value="1"  aria-label="j is verrekend"' in client.get("/").text
+    client.post("/via/dd/verrekend", data={})
+    assert 'value="1"  aria-label="dd is verrekend"' in client.get("/").text
+
+
+def test_verrekend_voor_onbekende_via_geeft_melding(client):
+    assert "Onbekende via" in client.post("/via/zz/verrekend", headers=HTMX, data={"verrekend": "1"}).text
