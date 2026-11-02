@@ -22,6 +22,8 @@ Er zijn geen rollen of logins: iedereen kan alles.
 
 ## TODO
 
+- export maken van alle huidige data + mogelijkheid inladen in prod
+- toevoegen ww / andere beveiliging gegevens
 - site op domeinnaam + https
 
 ## Techniek
