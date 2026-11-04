@@ -131,7 +131,8 @@ def vereis_inlog():
         resp = make_response("", 204)
         resp.headers["HX-Redirect"] = url_for("login")
         return resp
-    return redirect(url_for("login", next=request.full_path))
+    # next is relatief aan de app (zonder prefix als /plop); bij het terugsturen komt die ervoor
+    return redirect(url_for("login", next=request.full_path.rstrip("?")))
 
 
 def veilige_next(url):
@@ -141,15 +142,15 @@ def veilige_next(url):
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    volgende = veilige_next(request.values.get("next")) or url_for("overzicht")
+    volgende = veilige_next(request.values.get("next")) or "/"
     if ingelogd():
-        return redirect(volgende)
+        return redirect(request.script_root + volgende)
     fout = None
     if request.method == "POST":
         if hmac.compare_digest(request.form.get("wachtwoord", "").encode(), WACHTWOORD.encode()):
             session.permanent = True
             session["auth"] = vingerafdruk()
-            return redirect(volgende, code=303)
+            return redirect(request.script_root + volgende, code=303)
         time.sleep(1)  # remt raden af
         fout = "Verkeerd wachtwoord"
     return render_template("login.html", fout=fout, volgende=volgende)

@@ -296,7 +296,7 @@ def test_ingelogd_slaat_loginpagina_over(client):
 
 def test_niet_ingelogd_naar_login(anoniem):
     r = anoniem.get("/via/m")
-    assert r.status_code == 302 and r.headers["Location"] == "/login?next=/via/m?"
+    assert r.status_code == 302 and r.headers["Location"] == "/login?next=/via/m"
     r = anoniem.post("/toekenning", headers=HTMX, data={})
     assert r.status_code == 204 and r.headers["HX-Redirect"] == "/login"
     assert anoniem.get("/static/style.css").status_code == 200
@@ -333,3 +333,13 @@ def test_ander_wachtwoord_logt_uit(anoniem, monkeypatch):
 
 def test_loginpagina_heeft_oogje(anoniem):
     assert "data-toon-wachtwoord" in anoniem.get("/login").text
+
+
+def test_inloggen_onder_prefix(anoniem):
+    # achter nginx op /plop: ProxyFix leest X-Forwarded-Prefix
+    prefix = {"X-Forwarded-Prefix": "/plop"}
+    r = anoniem.get("/via/m", headers=prefix)
+    assert r.headers["Location"] == "/plop/login?next=/via/m"
+    r = anoniem.post("/login", headers=prefix, data={"wachtwoord": "geheim", "next": "/via/m"})
+    assert r.headers["Location"] == "/plop/via/m"
+    assert anoniem.get("/login", headers=prefix).headers["Location"] == "/plop/"
