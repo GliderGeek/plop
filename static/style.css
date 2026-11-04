@@ -199,7 +199,13 @@ input.smal { width: 80px; flex: none; }
 .fles.fles-klein { height: 28px; width: 12px; display: inline-block; vertical-align: middle; }
 .fles.fles-klein svg { height: 28px; width: 11px; }
 .toekenning-naam { display: flex; align-items: center; gap: 8px; }
-.kop-met-knop { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.kop-met-knop { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; column-gap: 12px; }
+.kop-met-knop .knoppen { margin: 0; }
+/* mobiel: knoppen onder de kop, over de volle breedte */
+@media (max-width: 560px) {
+  .kop-met-knop .knoppen { flex: 1 1 100%; margin-bottom: 12px; }
+  .kop-met-knop .knoppen > * { flex: 1 1 auto; justify-content: center; }
+}
 .kop-met-knop:has(h2) { margin: 16px 0 10px; }
 .kop-met-knop h2 { margin: 0; }
 a.knop {
@@ -378,3 +384,16 @@ a.knop.secundair { font-weight: 500; }
 .klant-info strong { margin-right: 0; }
 .kop-acties { flex: none; display: flex; align-items: center; gap: 8px; }
 .kop-acties form { margin: 0; }
+
+/* inlogpagina; geen nav, dus zelf ruimte boven de kaart */
+.kaart.login { margin-top: 32px; padding: 16px 18px; }
+.login h2 { margin-bottom: 16px; }
+.login .knoppen { margin-top: 16px; }
+.wachtwoord-veld { position: relative; }
+.wachtwoord-veld input { padding-right: 44px; }
+.wachtwoord-veld input::-ms-reveal { display: none; }  /* Edge heeft een eigen oogje */
+.wachtwoord-veld .icoon-knop { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); }
+.wachtwoord-veld span { display: contents; }
+.wachtwoord-veld .oog-dicht, .wachtwoord-veld [aria-pressed=true] .oog-open { display: none; }
+.wachtwoord-veld [aria-pressed=true] .oog-dicht { display: contents; }
+label[for=wachtwoord] { margin-bottom: 4px; }

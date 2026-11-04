@@ -284,3 +284,15 @@ document.addEventListener("htmx:afterSwap", () => {
   kaartVoorSwap = null;
   if (kaart?.dataset.compleet === "1") vier(kaart.querySelector("strong").textContent);
 });
+
+// Oogje bij het wachtwoordveld: laat zien wat je getypt hebt.
+document.addEventListener("click", (e) => {
+  const knop = e.target.closest("[data-toon-wachtwoord]");
+  if (!knop) return;
+  const veld = knop.parentElement.querySelector("input");
+  const tonen = veld.type === "password";
+  veld.type = tonen ? "text" : "password";
+  knop.setAttribute("aria-pressed", tonen);
+  knop.title = knop.ariaLabel = tonen ? "Wachtwoord verbergen" : "Wachtwoord tonen";
+  veld.focus();
+});

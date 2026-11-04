@@ -1,10 +1,14 @@
+import hashlib
+import hmac
 import os
 import re
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from io import BytesIO
 
+from dotenv import load_dotenv
 from flask import (Flask, flash, g, make_response, redirect, render_template,
-                   request, send_file, url_for)
+                   request, send_file, session, url_for)
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import backup as backup_module
@@ -12,9 +16,24 @@ import db
 import logic
 from logic import CATEGORIEEN, KOSTEN_VERDELINGEN, ZOEK_CATEGORIEEN, ValidatieFout
 
+# bestaande environment-variabelen winnen van .env
+load_dotenv(os.environ.get("CHAMPAGNE_ENV_FILE",
+                           os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")))
+
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
-app.secret_key = os.environ.get("SECRET_KEY", "champagne-dev")
+
+# Eén gedeeld wachtwoord, altijd verplicht (ook lokaal), net als de sleutel voor de cookie.
+SECRET_KEY = os.environ.get("SECRET_KEY")
+WACHTWOORD = os.environ.get("CHAMPAGNE_WACHTWOORD")
+if not SECRET_KEY or not WACHTWOORD:
+    raise RuntimeError("Zet SECRET_KEY en CHAMPAGNE_WACHTWOORD in .env, zie .env.example")
+app.secret_key = SECRET_KEY
+app.config.update(
+    PERMANENT_SESSION_LIFETIME=timedelta(days=365),
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("CHAMPAGNE_HTTPS") == "1",
+)
 DB_PATH = os.environ.get("CHAMPAGNE_DB", os.path.join(app.root_path, "champagne.db"))
 
 
@@ -91,6 +110,49 @@ def validatiefout(e):
 
 def terug(default):
     return redirect(request.form.get("terug") or default, code=303)
+
+
+# --- inloggen ----------------------------------------------------------------
+
+def vingerafdruk():
+    """Staat in de sessie; een ander wachtwoord maakt alle bestaande sessies ongeldig."""
+    return hmac.new(app.secret_key.encode(), WACHTWOORD.encode(), hashlib.sha256).hexdigest()[:16]
+
+
+def ingelogd():
+    return hmac.compare_digest(session.get("auth", ""), vingerafdruk())
+
+
+@app.before_request
+def vereis_inlog():
+    if request.endpoint in ("static", "login") or ingelogd():
+        return None
+    if is_htmx():
+        resp = make_response("", 204)
+        resp.headers["HX-Redirect"] = url_for("login")
+        return resp
+    return redirect(url_for("login", next=request.full_path))
+
+
+def veilige_next(url):
+    """Alleen paden binnen de site, geen '//andere-site'."""
+    return url if url and url.startswith("/") and not url.startswith(("//", "/\\")) else None
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    volgende = veilige_next(request.values.get("next")) or url_for("overzicht")
+    if ingelogd():
+        return redirect(volgende)
+    fout = None
+    if request.method == "POST":
+        if hmac.compare_digest(request.form.get("wachtwoord", "").encode(), WACHTWOORD.encode()):
+            session.permanent = True
+            session["auth"] = vingerafdruk()
+            return redirect(volgende, code=303)
+        time.sleep(1)  # remt raden af
+        fout = "Verkeerd wachtwoord"
+    return render_template("login.html", fout=fout, volgende=volgende)
 
 
 # --- overzicht ---------------------------------------------------------------

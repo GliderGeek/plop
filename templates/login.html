@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "partials/iconen.html" import icoon %}
+{% block nav %}{% endblock %}
+{% block main %}
+{% if fout %}{% include "partials/melding.html" %}{% endif %}
+<form class="kaart login"method="post" action="{{ url_for('login') }}" hx-boost="false">
+  <h2>🍾 plop</h2>
+  <input type="hidden" name="next" value="{{ volgende }}">
+  <label for="wachtwoord">Wachtwoord</label>
+  <div class="wachtwoord-veld">
+    <input type="password" id="wachtwoord" name="wachtwoord" autocomplete="current-password" autofocus required>
+    <button type="button" class="icoon-knop" data-toon-wachtwoord aria-pressed="false" aria-label="Wachtwoord tonen" title="Wachtwoord tonen">
+      <span class="oog-open">{{ icoon('oog') }}</span><span class="oog-dicht">{{ icoon('oog-dicht') }}</span>
+    </button>
+  </div>
+  <div class="knoppen"><button>Inloggen</button></div>
+</form>
+{% endblock %}

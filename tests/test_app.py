@@ -5,6 +5,9 @@ import tempfile
 
 # vóór het importeren van app: die opent (en migreert) de database bij het laden
 os.environ["CHAMPAGNE_DB"] = os.path.join(tempfile.mkdtemp(), "test.db")
+os.environ["CHAMPAGNE_ENV_FILE"] = os.devnull  # een lokale .env mag de tests niet beïnvloeden
+os.environ["SECRET_KEY"] = "test"
+os.environ["CHAMPAGNE_WACHTWOORD"] = "geheim"
 
 import openpyxl
 import pytest
@@ -18,7 +21,8 @@ HTMX = {"HX-Request": "true"}
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
+def anoniem(tmp_path, monkeypatch):
+    """Client zonder inlog."""
     pad = str(tmp_path / "app.db")
     monkeypatch.setattr(app_module, "DB_PATH", pad)
     c = db.connect(pad)
@@ -26,6 +30,14 @@ def client(tmp_path, monkeypatch):
     c.close()
     app_module.app.config["TESTING"] = True
     return app_module.app.test_client()
+
+
+@pytest.fixture
+def client(anoniem):
+    """Ingelogde client."""
+    with anoniem.session_transaction() as s:
+        s["auth"] = app_module.vingerafdruk()
+    return anoniem
 
 
 @pytest.fixture
@@ -273,3 +285,51 @@ def test_verrekend_afvinken(client, conn):
 
 def test_verrekend_voor_onbekende_via_geeft_melding(client):
     assert "Onbekende via" in client.post("/via/zz/verrekend", headers=HTMX, data={"verrekend": "1"}).text
+
+
+# --- inloggen ----------------------------------------------------------------
+
+def test_ingelogd_slaat_loginpagina_over(client):
+    assert client.get("/").status_code == 200
+    assert client.get("/login").headers["Location"] == "/"
+
+
+def test_niet_ingelogd_naar_login(anoniem):
+    r = anoniem.get("/via/m")
+    assert r.status_code == 302 and r.headers["Location"] == "/login?next=/via/m?"
+    r = anoniem.post("/toekenning", headers=HTMX, data={})
+    assert r.status_code == 204 and r.headers["HX-Redirect"] == "/login"
+    assert anoniem.get("/static/style.css").status_code == 200
+    assert 'type="password"' in anoniem.get("/login").text
+
+
+def test_verkeerd_wachtwoord(anoniem, monkeypatch):
+    monkeypatch.setattr(app_module.time, "sleep", lambda s: None)
+    r = anoniem.post("/login", data={"wachtwoord": "fout"})
+    assert "Verkeerd wachtwoord" in r.text
+    assert anoniem.get("/").status_code == 302
+
+
+def test_inloggen_en_next(anoniem):
+    r = anoniem.post("/login", data={"wachtwoord": "geheim", "next": "/via/m"})
+    assert r.status_code == 303 and r.headers["Location"] == "/via/m"
+    assert anoniem.get("/").status_code == 200
+    cookie = anoniem.get_cookie("session")
+    assert cookie.expires is not None  # blijft bewaard na sluiten van de browser
+
+
+def test_next_naar_andere_site_genegeerd(anoniem):
+    for url in ("//evil.example", "https://evil.example", "/\\evil.example"):
+        r = anoniem.post("/login", data={"wachtwoord": "geheim", "next": url})
+        assert r.headers["Location"] == "/"
+        anoniem.delete_cookie("session")
+
+
+def test_ander_wachtwoord_logt_uit(anoniem, monkeypatch):
+    anoniem.post("/login", data={"wachtwoord": "geheim"})
+    monkeypatch.setattr(app_module, "WACHTWOORD", "nieuw")
+    assert anoniem.get("/").status_code == 302
+
+
+def test_loginpagina_heeft_oogje(anoniem):
+    assert "data-toon-wachtwoord" in anoniem.get("/login").text

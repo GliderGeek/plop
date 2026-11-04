@@ -18,12 +18,11 @@ Basisflessen lopen via hetzelfde patroon als de rest: ze worden gekocht op een b
 
 Het overzicht heeft per fase een inklapbare sectie: *Besteld*, *Nog te kopen* en *Verrekening*. De browser onthoudt welke secties open staan.
 
-Er zijn geen rollen of logins: iedereen kan alles.
+Er zijn geen rollen of gebruikers: iedereen deelt één wachtwoord en kan daarna alles. De browser blijft een jaar ingelogd.
 
 ## TODO
 
 - export maken van alle huidige data + mogelijkheid inladen in prod
-- toevoegen ww / andere beveiliging gegevens
 - site op domeinnaam + https
 - lijstje via's configureerbaar maken
 
@@ -61,7 +60,7 @@ Installeren (maakt `.venv` aan en installeert alles, inclusief de dev-dependenci
 uv sync
 ```
 
-De app starten:
+De app starten (eerst `.env` aanmaken, zie *Configuratie*):
 
 ```sh
 uv run flask --app app run --debug

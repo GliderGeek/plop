@@ -9,6 +9,7 @@
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
 <body hx-boost="true" data-plop="{{ url_for('static', filename='champagne_cork_pop_pour.mp3') }}">
+  {% block nav %}
   <nav class="nav">
     <a href="{{ url_for('overzicht') }}" class="{{ 'actief' if request.endpoint == 'overzicht' }}">Overzicht</a>
     {% for v in alle_vias %}
@@ -16,6 +17,7 @@
     {% endfor %}
     <a href="{{ url_for('aankopen') }}" class="{{ 'actief' if request.endpoint in ('aankopen', 'aankoop_nieuw', 'aankoop_bewerk') }}">Aankopen</a>
   </nav>
+  {% endblock %}
   <div id="melding">
     {% with berichten = get_flashed_messages(with_categories=true) %}
       {% for cat, m in berichten %}
