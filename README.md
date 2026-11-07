@@ -22,8 +22,10 @@ Er zijn geen rollen of gebruikers: iedereen deelt één wachtwoord en kan daarna
 
 ## TODO
 
-- export maken van alle huidige data + mogelijkheid inladen in prod
-- site op domeinnaam + https
+
+- meerdere jaren
+  - supporten meerdere jaren
+  - inladen andere jaren
 - lijstje via's configureerbaar maken
 
 ## Techniek
