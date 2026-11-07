@@ -26,11 +26,11 @@ def _tabblad(wb, titel, kop, rijen):
         ws.column_dimensions[kolom[0].column_letter].width = min(breedte + 2, 50)
 
 
-def werkboek(conn, tijdstip):
-    """Het werkboek als bytes: bestellingen, toekenningen, aankopen, kosten en verrekening op moment `tijdstip`."""
-    vaste = logic.wijnen(conn, vast=True)
-    vias = [v["code"] for v in logic.vias(conn)]
-    klanten = logic.klanten(conn)
+def werkboek(conn, jaar, tijdstip):
+    """Het werkboek van één jaar als bytes: bestellingen, toekenningen, aankopen, kosten en verrekening op moment `tijdstip`."""
+    vaste = logic.wijnen(conn, jaar, vast=True)
+    vias = [v["code"] for v in logic.vias(conn, jaar)]
+    klanten = logic.klanten(conn, jaar)
 
     wb = Workbook()
     wb.remove(wb.active)
@@ -48,8 +48,8 @@ def werkboek(conn, tijdstip):
              ([b["a"]["id"], b["a"]["omschrijving"], b["a"]["aangemaakt_op"], b["a"]["betaald_door"], x["r"]["naam"],
                CATEGORIEEN[x["r"]["categorie"]], x["r"]["aantal"], x["r"]["prijs"],
                *(x["verdeling"].get(via, 0) for via in vias)]
-              for b in logic.aankopen(conn) for x in b["regels"]))
-    vr = logic.verrekening(conn)
+              for b in logic.aankopen(conn, jaar) for x in b["regels"]))
+    vr = logic.verrekening(conn, jaar)
     _tabblad(wb, "Kosten", ["Omschrijving", "Bedrag", "Betaald door", "Categorie", "Deelnemers"],
              ([p["k"]["omschrijving"], p["k"]["bedrag"], p["k"]["betaald_door"], logic.KOSTEN_VERDELINGEN[p["k"]["verdeling"]],
                ", ".join(p["deelnemers"])] for p in vr["kosten"]))
@@ -57,7 +57,7 @@ def werkboek(conn, tijdstip):
              ([r["via"]["code"], *(r[s] / 100 for s in ("wijn", "kosten", "eigen", "te_betalen", "betaald", "saldo")),
                "ja" if r["via"]["verrekend"] else "nee"]
               for r in vr["per_via"]))
-    _tabblad(wb, "Snapshot", ["Gemaakt op"], [[tijdstip.strftime("%Y-%m-%d %H:%M:%S")]])
+    _tabblad(wb, "Snapshot", ["Jaar", "Gemaakt op"], [[jaar, tijdstip.strftime("%Y-%m-%d %H:%M:%S")]])
 
     uit = BytesIO()
     wb.save(uit)

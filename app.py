@@ -58,13 +58,29 @@ def is_htmx():
     return request.headers.get("HX-Request") == "true"
 
 
+def alle_jaren():
+    if "jaren" not in g:
+        g.jaren = logic.jaren(get_conn())
+    return g.jaren
+
+
+def huidig_jaar():
+    """Het jaar dat deze browser bekijkt (in de sessie); anders het nieuwste."""
+    gekozen = session.get("jaar")
+    return gekozen if gekozen in alle_jaren() else alle_jaren()[0]
+
+
 @app.context_processor
 def globals_():
+    jaar = huidig_jaar()
     return {
         "CATEGORIEEN": CATEGORIEEN,
         "KOSTEN_VERDELINGEN": KOSTEN_VERDELINGEN,
         "ZOEK_CATEGORIEEN": ZOEK_CATEGORIEEN,
-        "alle_vias": logic.vias(get_conn()),
+        "alle_vias": logic.vias(get_conn(), jaar),
+        "jaar": jaar,
+        "alle_jaren": alle_jaren(),
+        "nieuwste_jaar": alle_jaren()[0],
     }
 
 
@@ -160,17 +176,17 @@ def login():
 
 @app.get("/")
 def overzicht():
-    conn = get_conn()
-    return render_template("overzicht.html", ov=logic.overzicht(conn),
-                           totalen=logic.bestel_totalen(conn),
-                           vr=logic.verrekening(conn))
+    conn, jaar = get_conn(), huidig_jaar()
+    return render_template("overzicht.html", ov=logic.overzicht(conn, jaar),
+                           totalen=logic.bestel_totalen(conn, jaar),
+                           vr=logic.verrekening(conn, jaar))
 
 
 @app.get("/backup")
 def backup():
-    nu = datetime.now()
-    return send_file(BytesIO(backup_module.werkboek(get_conn(), nu)), as_attachment=True,
-                     download_name=f"champagne-{nu:%Y-%m-%d-%H%M%S}.xlsx",
+    nu, jaar = datetime.now(), huidig_jaar()
+    return send_file(BytesIO(backup_module.werkboek(get_conn(), jaar, nu)), as_attachment=True,
+                     download_name=f"champagne-{jaar}-{nu:%Y-%m-%d-%H%M%S}.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
@@ -178,8 +194,9 @@ def backup():
 
 def klant_form_opslaan(conn, klant_id):
     f = request.form
-    vast = {w["id"]: f.get(f"vast_{w['id']}") for w in logic.wijnen(conn, vast=True)}
-    return logic.klant_opslaan(conn, klant_id, f.get("via"), f.get("naam"), f.get("aantekening"),
+    jaar = huidig_jaar()
+    vast = {w["id"]: f.get(f"vast_{w['id']}") for w in logic.wijnen(conn, jaar, vast=True)}
+    return logic.klant_opslaan(conn, jaar, klant_id, f.get("via"), f.get("naam"), f.get("aantekening"),
                                f.get("iets_luxer_n"), f.get("luxe_n"), vast, f.get("versie"))
 
 
@@ -197,20 +214,20 @@ def klant_opslaan(klant_id):
 
 @app.post("/klant/<int:klant_id>/verwijder")
 def klant_verwijder(klant_id):
-    logic.klant_verwijderen(get_conn(), klant_id)
+    logic.klant_verwijderen(get_conn(), huidig_jaar(), klant_id)
     return terug(url_for("overzicht"))
 
 
 # --- aankopen ----------------------------------------------------------------
 
 def aankoop_form(bon=None):
-    conn = get_conn()
+    conn, jaar = get_conn(), huidig_jaar()
     return render_template(
         "aankoop.html",
         bon=bon,
-        wijnnamen=[w["naam"] for w in logic.wijnen(conn)],
-        vaste_namen=[w["naam"] for w in logic.wijnen(conn, vast=True)],
-        nog=logic.nog_per_via(conn),
+        wijnnamen=[w["naam"] for w in logic.wijnen(conn, jaar)],
+        vaste_namen=[w["naam"] for w in logic.wijnen(conn, jaar, vast=True)],
+        nog=logic.nog_per_via(conn, jaar),
     )
 
 
@@ -221,7 +238,7 @@ def aankoop_nieuw():
 
 @app.get("/aankoop/<int:aankoop_id>/bewerk")
 def aankoop_bewerk(aankoop_id):
-    bonnen = logic.aankopen(get_conn(), aankoop_id)
+    bonnen = logic.aankopen(get_conn(), huidig_jaar(), aankoop_id)
     if not bonnen:
         return redirect(url_for("aankopen"))
     return aankoop_form(bonnen[0])
@@ -248,9 +265,9 @@ def regels_uit_form(f, vias):
 @app.post("/aankoop")
 @app.post("/aankoop/<int:aankoop_id>")
 def aankoop_opslaan(aankoop_id=None):
-    conn = get_conn()
-    regels = regels_uit_form(request.form, logic.vias(conn))
-    logic.aankoop_opslaan(conn, aankoop_id, request.form.get("omschrijving"), regels,
+    conn, jaar = get_conn(), huidig_jaar()
+    regels = regels_uit_form(request.form, logic.vias(conn, jaar))
+    logic.aankoop_opslaan(conn, jaar, aankoop_id, request.form.get("omschrijving"), regels,
                           request.form.get("versie"), request.form.get("betaald_door"))
     flash("Aankoop opgeslagen.", "ok")
     return redirect(url_for("aankopen"), code=303)
@@ -258,39 +275,39 @@ def aankoop_opslaan(aankoop_id=None):
 
 @app.post("/aankoop/<int:aankoop_id>/verwijder")
 def aankoop_verwijder(aankoop_id):
-    logic.aankoop_verwijderen(get_conn(), aankoop_id)
+    logic.aankoop_verwijderen(get_conn(), huidig_jaar(), aankoop_id)
     return redirect(url_for("aankopen"), code=303)
 
 
 @app.get("/aankopen")
 def aankopen():
-    conn = get_conn()
-    return render_template("aankopen.html", aankopen=logic.aankopen(conn), kosten=logic.kosten(conn))
+    conn, jaar = get_conn(), huidig_jaar()
+    return render_template("aankopen.html", aankopen=logic.aankopen(conn, jaar), kosten=logic.kosten(conn, jaar))
 
 
 # --- via ---------------------------------------------------------------------
 
 @app.get("/via/<code>")
 def via(code):
-    conn = get_conn()
-    v = next((v for v in logic.vias(conn) if v["code"] == code), None)
+    conn, jaar = get_conn(), huidig_jaar()
+    v = next((v for v in logic.vias(conn, jaar) if v["code"] == code), None)
     if v is None:
         return redirect(url_for("overzicht"))
-    ov = next(r for r in logic.overzicht(conn)["per_via"] if r["via"]["code"] == code)
-    return render_template("via.html", v=v, ov=ov, pool=logic.pool(conn, code),
-                           klanten=logic.klanten(conn, code), vaste=logic.wijnen(conn, vast=True),
-                           bedragen=logic.klant_bedragen(conn, code))
+    ov = next(r for r in logic.overzicht(conn, jaar)["per_via"] if r["via"]["code"] == code)
+    return render_template("via.html", v=v, ov=ov, pool=logic.pool(conn, jaar, code),
+                           klanten=logic.klanten(conn, jaar, code), vaste=logic.wijnen(conn, jaar, vast=True),
+                           bedragen=logic.klant_bedragen(conn, jaar, code))
 
 
 @app.post("/klant/<int:klant_id>/betaald")
 def klant_betaald(klant_id):
-    logic.klant_betaald(get_conn(), klant_id, request.form.get("betaald"))
+    logic.klant_betaald(get_conn(), huidig_jaar(), klant_id, request.form.get("betaald"))
     return terug(url_for("overzicht"))
 
 
 @app.post("/via/<code>/verrekend")
 def via_verrekend(code):
-    logic.via_verrekend(get_conn(), code, request.form.get("verrekend"))
+    logic.via_verrekend(get_conn(), huidig_jaar(), code, request.form.get("verrekend"))
     return terug(url_for("overzicht"))
 
 
@@ -298,16 +315,16 @@ def via_verrekend(code):
 def toekenning():
     f = request.form
     if f.get("aanvullen"):
-        logic.toekenning_aanvullen(get_conn(), f.get("klant_id"), f.get("wine_id"))
+        logic.toekenning_aanvullen(get_conn(), huidig_jaar(), f.get("klant_id"), f.get("wine_id"))
     else:
-        logic.toekenning_wijzig(get_conn(), f.get("klant_id"), f.get("wine_id"), f.get("delta"))
+        logic.toekenning_wijzig(get_conn(), huidig_jaar(), f.get("klant_id"), f.get("wine_id"), f.get("delta"))
     return terug(url_for("overzicht"))
 
 
 @app.post("/overdracht")
 def overdracht():
     f = request.form
-    logic.overdragen(get_conn(), f.get("wine_id"), f.get("van_via"), f.get("naar_via"),
+    logic.overdragen(get_conn(), huidig_jaar(), f.get("wine_id"), f.get("van_via"), f.get("naar_via"),
                      f.get("aantal"))
     return terug(url_for("overzicht"))
 
@@ -318,12 +335,38 @@ def overdracht():
 @app.post("/kosten/<int:kosten_id>")
 def kosten_opslaan(kosten_id=None):
     f = request.form
-    logic.kosten_opslaan(get_conn(), kosten_id, f.get("omschrijving"), f.get("bedrag"),
+    logic.kosten_opslaan(get_conn(), huidig_jaar(), kosten_id, f.get("omschrijving"), f.get("bedrag"),
                          f.get("betaald_door"), f.get("versie"), f.get("verdeling"), f.getlist("deelnemers"))
     return redirect(url_for("aankopen", _anchor="vaste-kosten"), code=303)
 
 
 @app.post("/kosten/<int:kosten_id>/verwijder")
 def kosten_verwijder(kosten_id):
-    logic.kosten_verwijderen(get_conn(), kosten_id)
+    logic.kosten_verwijderen(get_conn(), huidig_jaar(), kosten_id)
     return redirect(url_for("aankopen", _anchor="vaste-kosten"), code=303)
+
+
+# --- jaren -------------------------------------------------------------------
+
+@app.get("/jaren")
+def jaren():
+    return render_template("jaren.html")
+
+
+@app.post("/jaren")
+def jaar_nieuw():
+    session["jaar"] = logic.jaar_aanmaken(get_conn(), request.form.get("jaar"))
+    flash(f"{session['jaar']} aangemaakt.", "ok")
+    return redirect(url_for("overzicht"), code=303)
+
+
+@app.post("/jaar")
+def jaar_kiezen():
+    try:
+        jaar = int(request.form.get("jaar", ""))
+    except ValueError:
+        jaar = None
+    if jaar not in alle_jaren():
+        raise ValidatieFout("Onbekend jaar.")
+    session["jaar"] = jaar
+    return redirect(url_for("overzicht"), code=303)

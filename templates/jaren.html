@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Jaren</h1>
+<div class="kaart">
+  {% for j in alle_jaren %}
+  <form class="jaar-rij" method="post" action="{{ url_for('jaar_kiezen') }}">
+    <strong>{{ j }}</strong>
+    {% if j == jaar %}<span class="chip klaar">bekijk je nu</span>
+    {% else %}<button class="secundair" name="jaar" value="{{ j }}">Bekijken</button>{% endif %}
+  </form>
+  {% endfor %}
+</div>
+
+<h2>Nieuw jaar</h2>
+<form class="kaart" method="post" action="{{ url_for('jaar_nieuw') }}">
+  <div class="rij">
+    <label>Jaar <input type="number" name="jaar" min="2000" max="2100" required inputmode="numeric"></label>
+  </div>
+  <button>Aanmaken</button>
+</form>
+{% endblock %}

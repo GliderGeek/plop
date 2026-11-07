@@ -3,6 +3,7 @@
 import math
 from collections import defaultdict
 
+import db
 from db import tx
 
 CATEGORIEEN = {
@@ -23,46 +24,53 @@ class ValidatieFout(Exception):
 
 # --- lezen -------------------------------------------------------------------
 
-def vias(conn):
-    return conn.execute("SELECT * FROM via ORDER BY volgorde").fetchall()
+def jaren(conn):
+    """Alle jaren, nieuwste eerst."""
+    return [r["jaar"] for r in conn.execute("SELECT jaar FROM jaar ORDER BY jaar DESC")]
 
 
-def wijnen(conn, vast=None):
-    sql, args = "SELECT * FROM wine", ()
+def vias(conn, jaar):
+    return conn.execute("SELECT * FROM via WHERE jaar = ? ORDER BY volgorde", (jaar,)).fetchall()
+
+
+def wijnen(conn, jaar, vast=None):
+    sql, args = "SELECT * FROM wine WHERE jaar = ?", (jaar,)
     if vast is not None:
-        sql, args = sql + " WHERE is_vast = ?", (1 if vast else 0,)
+        sql, args = sql + " AND is_vast = ?", (jaar, 1 if vast else 0)
     return conn.execute(sql + " ORDER BY is_vast DESC, CASE WHEN is_vast THEN id END, categorie, naam COLLATE NOCASE", args).fetchall()
 
 
-def wijn(conn, wine_id):
-    return conn.execute("SELECT * FROM wine WHERE id = ?", (wine_id,)).fetchone()
+def wijn(conn, jaar, wine_id):
+    return conn.execute("SELECT * FROM wine WHERE id = ? AND jaar = ?", (wine_id, jaar)).fetchone()
 
 
-def voorraad(conn):
+def voorraad(conn, jaar):
     """{(via, wine_id): aantal} — som van de verdelingen van alle aankoopregels."""
     rows = conn.execute(
         """SELECT v.via, r.wine_id, SUM(v.aantal) n
            FROM regel_verdeling v JOIN aankoop_regel r ON r.id = v.regel_id
-           GROUP BY v.via, r.wine_id"""
+           WHERE v.jaar = ? GROUP BY v.via, r.wine_id""",
+        (jaar,),
     )
     return {(r["via"], r["wine_id"]): r["n"] for r in rows}
 
 
-def toegekend(conn):
+def toegekend(conn, jaar):
     """{(via, wine_id): aantal} — toegekend aan klanten van die via."""
     rows = conn.execute(
         """SELECT k.via, t.wine_id, SUM(t.aantal) n
            FROM toekenning t JOIN klant k ON k.id = t.klant_id
-           GROUP BY k.via, t.wine_id"""
+           WHERE k.jaar = ? GROUP BY k.via, t.wine_id""",
+        (jaar,),
     )
     return {(r["via"], r["wine_id"]): r["n"] for r in rows}
 
 
-def pool(conn, via):
+def pool(conn, jaar, via):
     """Wijnen die een via heeft, met hoeveel er nog niet toegekend zijn."""
-    vr, tk = voorraad(conn), toegekend(conn)
+    vr, tk = voorraad(conn, jaar), toegekend(conn, jaar)
     uit = []
-    for w in wijnen(conn):
+    for w in wijnen(conn, jaar):
         n, t = vr.get((via, w["id"]), 0), tk.get((via, w["id"]), 0)
         if n or t:
             uit.append({"wijn": w, "voorraad": n, "toegekend": t, "vrij": n - t})
@@ -82,11 +90,11 @@ def _samen(standen):
             "overschot": sum(max(-s["nog"], 0) for s in standen)}
 
 
-def overzicht(conn):
+def overzicht(conn, jaar):
     """Per via: nodig / gekocht / nog per zoekcategorie en per vaste fles, plus totalen."""
     nodig = defaultdict(int)  # (via, categorie)
     for r in conn.execute(
-        "SELECT via, SUM(iets_luxer_n) il, SUM(luxe_n) lx FROM klant GROUP BY via"
+        "SELECT via, SUM(iets_luxer_n) il, SUM(luxe_n) lx FROM klant WHERE jaar = ? GROUP BY via", (jaar,)
     ):
         nodig[(r["via"], "iets_luxer")] = r["il"]
         nodig[(r["via"], "luxe")] = r["lx"]
@@ -94,23 +102,24 @@ def overzicht(conn):
     nodig_vast = defaultdict(int)  # (via, wine_id)
     for r in conn.execute(
         """SELECT k.via, kv.wine_id, SUM(kv.aantal) n FROM klant_vast kv
-           JOIN klant k ON k.id = kv.klant_id GROUP BY k.via, kv.wine_id"""
+           JOIN klant k ON k.id = kv.klant_id WHERE k.jaar = ? GROUP BY k.via, kv.wine_id""",
+        (jaar,),
     ):
         nodig_vast[(r["via"], r["wine_id"])] = r["n"]
 
-    vr = voorraad(conn)
-    cat_van = {w["id"]: w["categorie"] for w in wijnen(conn)}
+    vr = voorraad(conn, jaar)
+    cat_van = {w["id"]: w["categorie"] for w in wijnen(conn, jaar)}
     gekocht = defaultdict(int)  # (via, categorie)
     for (via, wid), n in vr.items():
         gekocht[(via, cat_van[wid])] += n
 
-    vaste = wijnen(conn, vast=True)
+    vaste = wijnen(conn, jaar, vast=True)
     per_via = [
         {"via": v,
          "cats": {c: _stand(nodig[(v["code"], c)], gekocht[(v["code"], c)]) for c in ZOEK_CATEGORIEEN},
          "vast": [{"wijn": w, **_stand(nodig_vast[(v["code"], w["id"])], vr.get((v["code"], w["id"]), 0))}
                   for w in vaste]}
-        for v in vias(conn)
+        for v in vias(conn, jaar)
     ]
     totaal = {c: _samen(r["cats"][c] for r in per_via) for c in ZOEK_CATEGORIEEN}
     totaal_vast = [{"wijn": w, **_samen(r["vast"][i] for r in per_via)} for i, w in enumerate(vaste)]
@@ -124,10 +133,10 @@ def overzicht(conn):
     }
 
 
-def nog_per_via(conn):
+def nog_per_via(conn, jaar):
     """Voor het aankoopformulier: {"basis": {basisfles: {via: nog}}, categorie: {via: nog}}."""
     nog = {"basis": {}, **{c: {} for c in ZOEK_CATEGORIEEN}}
-    for r in overzicht(conn)["per_via"]:
+    for r in overzicht(conn, jaar)["per_via"]:
         for x in r["vast"]:
             nog["basis"].setdefault(x["wijn"]["naam"], {})[r["via"]["code"]] = x["nog"]
         for c in ZOEK_CATEGORIEEN:
@@ -135,12 +144,12 @@ def nog_per_via(conn):
     return nog
 
 
-def bestel_totalen(conn, ks=None):
+def bestel_totalen(conn, jaar, ks=None):
     """Wat er besteld is, per via en samen (sleutel '_'): per vaste fles, per zoekcategorie en totaal."""
-    ks = klanten(conn) if ks is None else ks
-    vaste = wijnen(conn, vast=True)
+    ks = klanten(conn, jaar) if ks is None else ks
+    vaste = wijnen(conn, jaar, vast=True)
     totalen = {}
-    for v in vias(conn):
+    for v in vias(conn, jaar):
         rij = [k for k in ks if k["k"]["via"] == v["code"]]
         totalen[v["code"]] = {
             "vast": {w["id"]: sum(k["vast"].get(w["id"], 0) for k in rij) for w in vaste},
@@ -154,34 +163,39 @@ def bestel_totalen(conn, ks=None):
     return totalen
 
 
-def klant(conn, klant_id):
+def klant(conn, jaar, klant_id):
     """Eén klant zoals klanten() hem teruggeeft, of None."""
-    return next(iter(klanten(conn, klant_id=klant_id)), None)
+    return next(iter(klanten(conn, jaar, klant_id=klant_id)), None)
 
 
-def klanten(conn, via=None, klant_id=None):
+def klanten(conn, jaar, via=None, klant_id=None):
     """Klanten met hun vaste bestelling, toekenningen en open aantallen per zoekcategorie."""
-    sql, args = "SELECT * FROM klant", ()
+    sql, args = "SELECT * FROM klant WHERE jaar = ?", (jaar,)
     if klant_id is not None:
-        sql, args = sql + " WHERE id = ?", (klant_id,)
+        sql, args = sql + " AND id = ?", (jaar, klant_id)
     elif via:
-        sql, args = sql + " WHERE via = ?", (via,)
+        sql, args = sql + " AND via = ?", (jaar, via)
     rows = conn.execute(
-        sql + " ORDER BY (SELECT volgorde FROM via WHERE code = klant.via), naam COLLATE NOCASE", args
+        sql + " ORDER BY (SELECT volgorde FROM via WHERE jaar = klant.jaar AND code = klant.via),"
+              " naam COLLATE NOCASE", args
     ).fetchall()
 
     vast = defaultdict(dict)
-    for r in conn.execute("SELECT * FROM klant_vast"):
+    for r in conn.execute(
+        "SELECT kv.* FROM klant_vast kv JOIN klant k ON k.id = kv.klant_id WHERE k.jaar = ?", (jaar,)
+    ):
         vast[r["klant_id"]][r["wine_id"]] = r["aantal"]
 
     tks = defaultdict(list)
     for r in conn.execute(
         """SELECT t.klant_id, t.aantal, w.id wine_id, w.naam, w.categorie
-           FROM toekenning t JOIN wine w ON w.id = t.wine_id ORDER BY w.naam COLLATE NOCASE"""
+           FROM toekenning t JOIN wine w ON w.id = t.wine_id
+           WHERE w.jaar = ? ORDER BY w.naam COLLATE NOCASE""",
+        (jaar,),
     ):
         tks[r["klant_id"]].append(dict(r))
 
-    vaste = wijnen(conn, vast=True)
+    vaste = wijnen(conn, jaar, vast=True)
     uit = []
     for k in rows:
         heeft_wijn = defaultdict(int)
@@ -213,24 +227,27 @@ def klanten(conn, via=None, klant_id=None):
     return uit
 
 
-def aankopen(conn, aankoop_id=None):
+def aankopen(conn, jaar, aankoop_id=None):
     """Bonnen met hun regels (wijn, aantal, prijs, verdeling per via), nieuwste eerst."""
-    sql, args = "SELECT * FROM aankoop", ()
+    sql, args = "SELECT * FROM aankoop WHERE jaar = ?", (jaar,)
     if aankoop_id is not None:
-        sql, args = sql + " WHERE id = ?", (aankoop_id,)
+        sql, args = sql + " AND id = ?", (jaar, aankoop_id)
     bonnen = conn.execute(sql + " ORDER BY id DESC", args).fetchall()
 
     verdeling = defaultdict(dict)
     for r in conn.execute(
         """SELECT v.regel_id, v.via, v.aantal FROM regel_verdeling v
-           JOIN via ON via.code = v.via ORDER BY via.volgorde"""
+           JOIN via ON via.jaar = v.jaar AND via.code = v.via
+           WHERE v.jaar = ? ORDER BY via.volgorde""",
+        (jaar,),
     ):
         verdeling[r["regel_id"]][r["via"]] = r["aantal"]
 
     regels = defaultdict(list)
     for r in conn.execute(
         """SELECT r.*, w.naam, w.categorie, w.is_vast FROM aankoop_regel r
-           JOIN wine w ON w.id = r.wine_id ORDER BY r.id"""
+           JOIN wine w ON w.id = r.wine_id WHERE w.jaar = ? ORDER BY r.id""",
+        (jaar,),
     ):
         regels[r["aankoop_id"]].append({"r": r, "verdeling": verdeling[r["id"]]})
 
@@ -248,17 +265,19 @@ def aankopen(conn, aankoop_id=None):
     return uit
 
 
-def kosten(conn, kosten_id=None):
+def kosten(conn, jaar, kosten_id=None):
     """Overige aankopen met deelnemers en wat er nog ontbreekt, oudste eerst."""
     deelnemers = defaultdict(list)
     for r in conn.execute(
         """SELECT d.kosten_id, d.via FROM kosten_deelnemer d
-           JOIN via ON via.code = d.via ORDER BY via.volgorde"""
+           JOIN via ON via.jaar = d.jaar AND via.code = d.via
+           WHERE d.jaar = ? ORDER BY via.volgorde""",
+        (jaar,),
     ):
         deelnemers[r["kosten_id"]].append(r["via"])
-    sql, args = "SELECT * FROM kosten", ()
+    sql, args = "SELECT * FROM kosten WHERE jaar = ?", (jaar,)
     if kosten_id is not None:
-        sql, args = sql + " WHERE id = ?", (kosten_id,)
+        sql, args = sql + " AND id = ?", (jaar, kosten_id)
     uit = []
     for k in conn.execute(sql + " ORDER BY id", args):
         ontbreekt = [] if k["bedrag"] is not None else ["bedrag ontbreekt"]
@@ -288,7 +307,7 @@ def _verdeel(cent, gewichten):
     return uit
 
 
-def verrekening(conn):
+def verrekening(conn, jaar):
     """Stand per via: wijn + kosten tegenover wat de via betaald heeft. Saldo > 0: krijgt terug.
     Ontbrekende prijzen en bedragen tellen niet mee.
     kosten: aandeel in de posten voor alle bestellers (naar rato van de wijn), doorberekend.
@@ -297,7 +316,7 @@ def verrekening(conn):
     onbekende_betaler: wel verdeeld, maar nog bij niemand betaald.
     onverdeeld: kosten voor de bestellers zolang er geen wijn met prijs is om ze over te verdelen.
     De saldi plus onbekende_betaler min onverdeeld zijn samen precies 0."""
-    bonnen, posten, alle = aankopen(conn), kosten(conn), vias(conn)
+    bonnen, posten, alle = aankopen(conn, jaar), kosten(conn, jaar), vias(conn, jaar)
     wijn = {v["code"]: 0 for v in alle}
     betaald = dict(wijn)
     onbekend = 0
@@ -350,26 +369,26 @@ def verrekening(conn):
             "totaal": {s: sum(r[s] for r in per_via) for s in ("wijn", "kosten", "eigen", "te_betalen", "betaald")}}
 
 
-def klant_bedragen(conn, via):
+def klant_bedragen(conn, jaar, via):
     """Wat elke bestelling van een via kost. Toegekende flessen tellen voor de gemiddelde prijs
     van die wijn binnen de via; de rest staat op 'vrij'. Samen precies het totaal van de via.
     ontbreekt: wat nog ingevuld moet worden. Zolang dat niet leeg is, zijn de bedragen niet definitief:
     elke prijs verschuift via de reiskosten de bedragen van iedereen, ook bij andere via's."""
-    vr = verrekening(conn)
+    vr = verrekening(conn, jaar)
     stand = next(r for r in vr["per_via"] if r["via"]["code"] == via)
     gemiddeld = {}
     for r in conn.execute(
         """SELECT r.wine_id, SUM(v.aantal * r.prijs) som, SUM(v.aantal) met
            FROM regel_verdeling v JOIN aankoop_regel r ON r.id = v.regel_id
-           WHERE v.via = ? AND r.prijs IS NOT NULL GROUP BY r.wine_id""",
-        (via,),
+           WHERE v.jaar = ? AND v.via = ? AND r.prijs IS NOT NULL GROUP BY r.wine_id""",
+        (jaar, via),
     ):
         gemiddeld[r["wine_id"]] = r["som"] / r["met"]
 
-    ks = klanten(conn, via)
+    ks = klanten(conn, jaar, via)
     gewichten = {k["k"]["id"]: sum(t["aantal"] * gemiddeld.get(t["wine_id"], 0) for t in k["toekenningen"])
                  for k in ks}
-    p = pool(conn, via)
+    p = pool(conn, jaar, via)
     gewichten[None] = sum(x["vrij"] * gemiddeld.get(x["wijn"]["id"], 0) for x in p)
     wijn, aandeel = _verdeel(stand["wijn"], gewichten), _verdeel(stand["kosten"], gewichten)
 
@@ -387,13 +406,13 @@ def klant_bedragen(conn, via):
 
 # --- consistentie ------------------------------------------------------------
 
-def controleer(conn, bij_toekennen=False):
+def controleer(conn, jaar, bij_toekennen=False):
     """Niet meer toegekend dan een via heeft."""
-    vr, tk = voorraad(conn), toegekend(conn)
+    vr, tk = voorraad(conn, jaar), toegekend(conn, jaar)
     for (via, wid), t in tk.items():
         n = vr.get((via, wid), 0)
         if t > n:
-            naam = wijn(conn, wid)["naam"]
+            naam = wijn(conn, jaar, wid)["naam"]
             if bij_toekennen:
                 raise ValidatieFout(f"Niet genoeg {naam} vrij in de pool van {via}.")
             raise ValidatieFout(
@@ -431,21 +450,21 @@ def _prijs(v, veld="Prijs"):
     return bedrag
 
 
-def _via(conn, code):
-    if not conn.execute("SELECT 1 FROM via WHERE code = ?", (code,)).fetchone():
+def _via(conn, jaar, code):
+    if not conn.execute("SELECT 1 FROM via WHERE jaar = ? AND code = ?", (jaar, code)).fetchone():
         raise ValidatieFout(f"Onbekende via: {code}.")
     return code
 
 
-def _bestaande_wijn(conn, wine_id):
-    w = wijn(conn, wine_id)
+def _bestaande_wijn(conn, jaar, wine_id):
+    w = wijn(conn, jaar, wine_id)
     if w is None:
         raise ValidatieFout("Onbekende wijn.")
     return w
 
 
-def _bestaande_klant(conn, klant_id):
-    if not conn.execute("SELECT 1 FROM klant WHERE id = ?", (klant_id,)).fetchone():
+def _bestaande_klant(conn, jaar, klant_id):
+    if not conn.execute("SELECT 1 FROM klant WHERE id = ? AND jaar = ?", (klant_id, jaar)).fetchone():
         raise ValidatieFout("Deze bestelling bestaat niet (meer). Laad de pagina opnieuw.")
 
 
@@ -455,7 +474,7 @@ def _intussen_gewijzigd(wat):
 
 # --- klanten -----------------------------------------------------------------
 
-def klant_opslaan(conn, klant_id, via, naam, aantekening, iets_luxer_n, luxe_n, vast, versie=None):
+def klant_opslaan(conn, jaar, klant_id, via, naam, aantekening, iets_luxer_n, luxe_n, vast, versie=None):
     """Nieuwe klant (klant_id leeg) of bestaande bijwerken. Met versie (uit het formulier)
     mislukt het als iemand anders de klant intussen heeft gewijzigd."""
     naam = (naam or "").strip()
@@ -466,23 +485,24 @@ def klant_opslaan(conn, klant_id, via, naam, aantekening, iets_luxer_n, luxe_n, 
     vast = {wid: _int(n, "Aantal") for wid, n in vast.items()}
     versie = _versie(versie)
     with tx(conn):
-        _via(conn, via)
+        _via(conn, jaar, via)
         if klant_id:
             sql, args = ("""UPDATE klant SET via=?, naam=?, aantekening=?, iets_luxer_n=?, luxe_n=?,
-                            versie = versie + 1 WHERE id=?""",
-                         [via, naam, aantekening or "", il, lx, klant_id])
+                            versie = versie + 1 WHERE id=? AND jaar=?""",
+                         [via, naam, aantekening or "", il, lx, klant_id, jaar])
             if versie is not None:
                 sql, args = sql + " AND versie=?", args + [versie]
             if not conn.execute(sql, args).rowcount:
                 raise _intussen_gewijzigd(naam)
         else:
             klant_id = conn.execute(
-                """INSERT INTO klant (via, naam, aantekening, iets_luxer_n, luxe_n)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (via, naam, aantekening or "", il, lx),
+                """INSERT INTO klant (jaar, via, naam, aantekening, iets_luxer_n, luxe_n)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (jaar, via, naam, aantekening or "", il, lx),
             ).lastrowid
         for wid, n in vast.items():
-            if not conn.execute("SELECT 1 FROM wine WHERE id = ? AND is_vast = 1", (wid,)).fetchone():
+            if not conn.execute("SELECT 1 FROM wine WHERE id = ? AND jaar = ? AND is_vast = 1",
+                                (wid, jaar)).fetchone():
                 raise ValidatieFout("Onbekende basisfles.")
             conn.execute(
                 "DELETE FROM klant_vast WHERE klant_id=? AND wine_id=?", (klant_id, wid)
@@ -492,32 +512,32 @@ def klant_opslaan(conn, klant_id, via, naam, aantekening, iets_luxer_n, luxe_n, 
                     "INSERT INTO klant_vast (klant_id, wine_id, aantal) VALUES (?, ?, ?)",
                     (klant_id, wid, n),
                 )
-        controleer(conn)  # via gewijzigd → toekenningen verhuizen mee
+        controleer(conn, jaar)  # via gewijzigd → toekenningen verhuizen mee
     return klant_id
 
 
-def klant_verwijderen(conn, klant_id):
+def klant_verwijderen(conn, jaar, klant_id):
     with tx(conn):
-        conn.execute("DELETE FROM klant WHERE id=?", (klant_id,))
+        conn.execute("DELETE FROM klant WHERE id=? AND jaar=?", (klant_id, jaar))
 
 
-def klant_betaald(conn, klant_id, betaald):
+def klant_betaald(conn, jaar, klant_id, betaald):
     """Afvinken dat iemand betaald heeft; raakt de versie niet, zodat een open bewerkformulier blijft werken."""
     with tx(conn):
-        _bestaande_klant(conn, klant_id)
+        _bestaande_klant(conn, jaar, klant_id)
         conn.execute("UPDATE klant SET betaald=? WHERE id=?", (1 if betaald else 0, klant_id))
 
 
-def via_verrekend(conn, via, verrekend):
+def via_verrekend(conn, jaar, via, verrekend):
     """Afvinken dat een via zijn saldo verrekend heeft."""
     with tx(conn):
-        _via(conn, via)
-        conn.execute("UPDATE via SET verrekend=? WHERE code=?", (1 if verrekend else 0, via))
+        _via(conn, jaar, via)
+        conn.execute("UPDATE via SET verrekend=? WHERE jaar=? AND code=?", (1 if verrekend else 0, jaar, via))
 
 
 # --- aankopen ----------------------------------------------------------------
 
-def aankoop_opslaan(conn, aankoop_id, omschrijving, regels, versie=None, betaald_door=None):
+def aankoop_opslaan(conn, jaar, aankoop_id, omschrijving, regels, versie=None, betaald_door=None):
     """Slaat een bon op. regels: [{naam, categorie, prijs, verdeling: {via: n}}].
     Wijnen worden op naam herkend (hoofdletterongevoelig) en zo nodig aangemaakt.
     Met versie (uit het formulier) mislukt het als de bon intussen is gewijzigd,
@@ -531,10 +551,10 @@ def aankoop_opslaan(conn, aankoop_id, omschrijving, regels, versie=None, betaald
     betaald_door = betaald_door or None
     with tx(conn):
         for via in {v for r in schoon for v in r["verdeling"]} | ({betaald_door} if betaald_door else set()):
-            _via(conn, via)
+            _via(conn, jaar, via)
         if aankoop_id:
-            sql, args = ("UPDATE aankoop SET omschrijving=?, betaald_door=?, versie = versie + 1 WHERE id=?",
-                         [omschrijving, betaald_door, aankoop_id])
+            sql, args = ("UPDATE aankoop SET omschrijving=?, betaald_door=?, versie = versie + 1 WHERE id=? AND jaar=?",
+                         [omschrijving, betaald_door, aankoop_id, jaar])
             if versie is not None:
                 sql, args = sql + " AND versie=?", args + [versie]
             if not conn.execute(sql, args).rowcount:
@@ -542,20 +562,21 @@ def aankoop_opslaan(conn, aankoop_id, omschrijving, regels, versie=None, betaald
             conn.execute("DELETE FROM aankoop_regel WHERE aankoop_id=?", (aankoop_id,))
         else:
             aankoop_id = conn.execute(
-                "INSERT INTO aankoop (omschrijving, betaald_door) VALUES (?, ?)", (omschrijving, betaald_door)
+                "INSERT INTO aankoop (jaar, omschrijving, betaald_door) VALUES (?, ?, ?)",
+                (jaar, omschrijving, betaald_door)
             ).lastrowid
         for r in schoon:
-            wine_id = _wijn_voor(conn, r["naam"], r["categorie"])
+            wine_id = _wijn_voor(conn, jaar, r["naam"], r["categorie"])
             regel_id = conn.execute(
                 "INSERT INTO aankoop_regel (aankoop_id, wine_id, aantal, prijs) VALUES (?, ?, ?, ?)",
                 (aankoop_id, wine_id, r["aantal"], r["prijs"]),
             ).lastrowid
             conn.executemany(
-                "INSERT INTO regel_verdeling (regel_id, via, aantal) VALUES (?, ?, ?)",
-                [(regel_id, via, n) for via, n in r["verdeling"].items()],
+                "INSERT INTO regel_verdeling (regel_id, jaar, via, aantal) VALUES (?, ?, ?, ?)",
+                [(regel_id, jaar, via, n) for via, n in r["verdeling"].items()],
             )
-        controleer(conn)
-        _ruim_wijnen_op(conn)
+        controleer(conn, jaar)
+        _ruim_wijnen_op(conn, jaar)
     return aankoop_id
 
 
@@ -583,15 +604,15 @@ def _geen_tegenstrijdige_categorie(regels):
             raise ValidatieFout(f"{r['naam']}: staat twee keer op de bon met een andere categorie.")
 
 
-def _wijn_voor(conn, naam, categorie):
+def _wijn_voor(conn, jaar, naam, categorie):
     """Wijn op naam opzoeken of aanmaken. Vaste basisflessen hebben hun eigen categorie;
     voor een nieuwe wijn is een categorie verplicht."""
-    w = conn.execute("SELECT * FROM wine WHERE naam = ? COLLATE NOCASE", (naam,)).fetchone()
+    w = conn.execute("SELECT * FROM wine WHERE jaar = ? AND naam = ? COLLATE NOCASE", (jaar, naam)).fetchone()
     if w is None:
         if categorie not in ZOEK_CATEGORIEEN:
             raise ValidatieFout(f"{naam}: kies een categorie.")
         return conn.execute(
-            "INSERT INTO wine (naam, categorie) VALUES (?, ?)", (naam, categorie)
+            "INSERT INTO wine (jaar, naam, categorie) VALUES (?, ?, ?)", (jaar, naam, categorie)
         ).lastrowid
     if w["is_vast"] or not categorie or w["categorie"] == categorie:
         return w["id"]
@@ -612,25 +633,26 @@ def _wijn_voor(conn, naam, categorie):
     return w["id"]
 
 
-def _ruim_wijnen_op(conn):
+def _ruim_wijnen_op(conn, jaar):
     """Wijnen die op geen enkele bon meer staan, verdwijnen."""
     conn.execute(
-        """DELETE FROM wine WHERE is_vast = 0
+        """DELETE FROM wine WHERE jaar = ? AND is_vast = 0
            AND id NOT IN (SELECT wine_id FROM aankoop_regel)
-           AND id NOT IN (SELECT wine_id FROM toekenning)"""
+           AND id NOT IN (SELECT wine_id FROM toekenning)""",
+        (jaar,),
     )
 
 
-def aankoop_verwijderen(conn, aankoop_id):
+def aankoop_verwijderen(conn, jaar, aankoop_id):
     with tx(conn):
-        conn.execute("DELETE FROM aankoop WHERE id=?", (aankoop_id,))
-        controleer(conn)
-        _ruim_wijnen_op(conn)
+        conn.execute("DELETE FROM aankoop WHERE id=? AND jaar=?", (aankoop_id, jaar))
+        controleer(conn, jaar)
+        _ruim_wijnen_op(conn, jaar)
 
 
 # --- overige aankopen -------------------------------------------------------------
 
-def kosten_opslaan(conn, kosten_id, omschrijving, bedrag, betaald_door, versie=None, verdeling="bestellers",
+def kosten_opslaan(conn, jaar, kosten_id, omschrijving, bedrag, betaald_door, versie=None, verdeling="bestellers",
                    deelnemers=()):
     """Nieuwe post (kosten_id leeg) of bestaande bijwerken; het bedrag mag leeg blijven.
     deelnemers: wie meedoet aan eigen kosten; bij reiskosten genegeerd."""
@@ -649,33 +671,34 @@ def kosten_opslaan(conn, kosten_id, omschrijving, bedrag, betaald_door, versie=N
     versie = _versie(versie)
     with tx(conn):
         for via in {betaald_door, *deelnemers}:
-            _via(conn, via)
+            _via(conn, jaar, via)
         if kosten_id:
-            sql, args = ("UPDATE kosten SET omschrijving=?, bedrag=?, betaald_door=?, verdeling=?, versie = versie + 1 WHERE id=?",
-                         [omschrijving, bedrag, betaald_door, verdeling, kosten_id])
+            sql, args = ("UPDATE kosten SET omschrijving=?, bedrag=?, betaald_door=?, verdeling=?, versie = versie + 1 "
+                         "WHERE id=? AND jaar=?",
+                         [omschrijving, bedrag, betaald_door, verdeling, kosten_id, jaar])
             if versie is not None:
                 sql, args = sql + " AND versie=?", args + [versie]
             if not conn.execute(sql, args).rowcount:
                 raise _intussen_gewijzigd(omschrijving)
         else:
             kosten_id = conn.execute(
-                "INSERT INTO kosten (omschrijving, bedrag, betaald_door, verdeling) VALUES (?, ?, ?, ?)",
-                (omschrijving, bedrag, betaald_door, verdeling),
+                "INSERT INTO kosten (jaar, omschrijving, bedrag, betaald_door, verdeling) VALUES (?, ?, ?, ?, ?)",
+                (jaar, omschrijving, bedrag, betaald_door, verdeling),
             ).lastrowid
         conn.execute("DELETE FROM kosten_deelnemer WHERE kosten_id=?", (kosten_id,))
-        conn.executemany("INSERT INTO kosten_deelnemer (kosten_id, via) VALUES (?, ?)",
-                         [(kosten_id, via) for via in set(deelnemers)])
+        conn.executemany("INSERT INTO kosten_deelnemer (kosten_id, jaar, via) VALUES (?, ?, ?)",
+                         [(kosten_id, jaar, via) for via in set(deelnemers)])
     return kosten_id
 
 
-def kosten_verwijderen(conn, kosten_id):
+def kosten_verwijderen(conn, jaar, kosten_id):
     with tx(conn):
-        conn.execute("DELETE FROM kosten WHERE id=?", (kosten_id,))
+        conn.execute("DELETE FROM kosten WHERE id=? AND jaar=?", (kosten_id, jaar))
 
 
 # --- overdragen ---------------------------------------------------------------
 
-def overdragen(conn, wine_id, van_via, naar_via, aantal):
+def overdragen(conn, jaar, wine_id, van_via, naar_via, aantal):
     """Verschuift flessen tussen via's door de verdeling van de aankoopregels aan te passen
     (nieuwste bon eerst). Er wordt geen aparte overdracht opgeslagen."""
     wine_id = _int(wine_id, "Wijn", 1)
@@ -683,14 +706,14 @@ def overdragen(conn, wine_id, van_via, naar_via, aantal):
     if van_via == naar_via:
         raise ValidatieFout("Kies een andere via.")
     with tx(conn):
-        w = _bestaande_wijn(conn, wine_id)
-        _via(conn, van_via)
-        _via(conn, naar_via)
+        w = _bestaande_wijn(conn, jaar, wine_id)
+        _via(conn, jaar, van_via)
+        _via(conn, jaar, naar_via)
         rows = conn.execute(
             """SELECT v.regel_id, v.aantal FROM regel_verdeling v
                JOIN aankoop_regel r ON r.id = v.regel_id
-               WHERE r.wine_id = ? AND v.via = ? ORDER BY r.aankoop_id DESC, r.id DESC""",
-            (wine_id, van_via),
+               WHERE r.wine_id = ? AND v.jaar = ? AND v.via = ? ORDER BY r.aankoop_id DESC, r.id DESC""",
+            (wine_id, jaar, van_via),
         ).fetchall()
         heeft = sum(r["aantal"] for r in rows)
         if heeft < aantal:
@@ -698,14 +721,14 @@ def overdragen(conn, wine_id, van_via, naar_via, aantal):
         rest = aantal
         for r in rows:
             n = min(rest, r["aantal"])
-            _verplaats(conn, r["regel_id"], van_via, naar_via, n)
+            _verplaats(conn, jaar, r["regel_id"], van_via, naar_via, n)
             rest -= n
             if not rest:
                 break
-        controleer(conn)
+        controleer(conn, jaar)
 
 
-def _verplaats(conn, regel_id, van_via, naar_via, n):
+def _verplaats(conn, jaar, regel_id, van_via, naar_via, n):
     huidig = conn.execute(
         "SELECT aantal FROM regel_verdeling WHERE regel_id=? AND via=?", (regel_id, van_via)
     ).fetchone()["aantal"]
@@ -717,9 +740,9 @@ def _verplaats(conn, regel_id, van_via, naar_via, n):
             (n, regel_id, van_via),
         )
     conn.execute(
-        """INSERT INTO regel_verdeling (regel_id, via, aantal) VALUES (?, ?, ?)
+        """INSERT INTO regel_verdeling (regel_id, jaar, via, aantal) VALUES (?, ?, ?, ?)
            ON CONFLICT (regel_id, via) DO UPDATE SET aantal = aantal + excluded.aantal""",
-        (regel_id, naar_via, n),
+        (regel_id, jaar, naar_via, n),
     )
     # de bon is gewijzigd: een open bewerkformulier mag dit niet meer overschrijven
     conn.execute(
@@ -730,12 +753,12 @@ def _verplaats(conn, regel_id, van_via, naar_via, n):
 
 # --- toekenningen ------------------------------------------------------------
 
-def toekenning_wijzig(conn, klant_id, wine_id, delta):
+def toekenning_wijzig(conn, jaar, klant_id, wine_id, delta):
     klant_id, wine_id = _int(klant_id, "Klant", 1), _int(wine_id, "Wijn", 1)
     delta = _int(delta, "Aantal", minimum=None)
     with tx(conn):
-        _bestaande_klant(conn, klant_id)
-        _bestaande_wijn(conn, wine_id)
+        _bestaande_klant(conn, jaar, klant_id)
+        _bestaande_wijn(conn, jaar, wine_id)
         r = conn.execute(
             "SELECT aantal FROM toekenning WHERE klant_id=? AND wine_id=?", (klant_id, wine_id)
         ).fetchone()
@@ -748,21 +771,43 @@ def toekenning_wijzig(conn, klant_id, wine_id, delta):
                 "INSERT INTO toekenning (klant_id, wine_id, aantal) VALUES (?, ?, ?)",
                 (klant_id, wine_id, nieuw),
             )
-        controleer(conn, bij_toekennen=delta > 0)
+        controleer(conn, jaar, bij_toekennen=delta > 0)
 
 
-def toekenning_aanvullen(conn, klant_id, wine_id):
+def toekenning_aanvullen(conn, jaar, klant_id, wine_id):
     """Kent van een vaste wijn in één keer toe wat de klant nog nodig heeft,
     zover de pool van zijn via het toelaat."""
     klant_id, wine_id = _int(klant_id, "Klant", 1), _int(wine_id, "Wijn", 1)
     with tx(conn):
-        k = klant(conn, klant_id)
+        k = klant(conn, jaar, klant_id)
         if k is None:
-            _bestaande_klant(conn, klant_id)  # geeft de melding
+            _bestaande_klant(conn, jaar, klant_id)  # geeft de melding
         st = next((x for x in k["vast_status"] if x["wijn"]["id"] == wine_id), None)
         open_ = st["open"] if st else 0
-        vrij = next((p["vrij"] for p in pool(conn, k["k"]["via"]) if p["wijn"]["id"] == wine_id), 0)
+        vrij = next((p["vrij"] for p in pool(conn, jaar, k["k"]["via"]) if p["wijn"]["id"] == wine_id), 0)
         n = min(open_, vrij)
         if n <= 0:
             raise ValidatieFout(f"Niets aan te vullen voor {k['k']['naam']}.")
-        toekenning_wijzig(conn, klant_id, wine_id, n)
+        toekenning_wijzig(conn, jaar, klant_id, wine_id, n)
+
+
+# --- jaren --------------------------------------------------------------------
+
+def jaar_aanmaken(conn, jaar):
+    """Nieuw jaar. Via's en vaste basisflessen (met prijs) komen van het nieuwste jaar,
+    of uit de startdata als er nog geen jaar is."""
+    jaar = _int(jaar, "Jaar", 2000)
+    if jaar > 2100:
+        raise ValidatieFout("Jaar moet tussen 2000 en 2100 liggen.")
+    with tx(conn):
+        if conn.execute("SELECT 1 FROM jaar WHERE jaar = ?", (jaar,)).fetchone():
+            raise ValidatieFout(f"{jaar} bestaat al.")
+        bron = next(iter(jaren(conn)), None)
+        if bron is None:
+            via_lijst = db.VIAS
+            vaste = [(naam, prijs) for naam, _cat, prijs in db.VASTE_WIJNEN]
+        else:
+            via_lijst = [(v["code"], v["naam"]) for v in vias(conn, bron)]
+            vaste = [(w["naam"], w["prijs"]) for w in wijnen(conn, bron, vast=True)]
+        db.maak_jaar(conn, jaar, via_lijst, vaste)
+    return jaar

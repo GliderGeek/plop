@@ -65,6 +65,20 @@ a { color: var(--accent); }
 }
 .nav a.actief { background: var(--bg); }
 .nav a.via-link { min-width: 40px; text-align: center; }
+/* jaarkeuze: rechts in de nav (op een telefoon achteraan in de scrollende balk), geen via */
+.nav a.jaar-link {
+  margin-left: auto; align-self: center; padding: 4px 10px; font-size: .85rem;
+  color: var(--zacht); border: 1px solid var(--rand); border-radius: 999px;
+}
+.nav a.jaar-link.actief { color: var(--tekst); }
+/* een ouder jaar bekijken: niet per ongeluk daarin bewerken */
+.jaar-banner {
+  display: flex; justify-content: center; align-items: center; gap: 8px; margin: 0;
+  padding: 4px 12px; background: var(--overschot); color: #fff; font-size: .9rem;
+}
+.jaar-banner button.link { color: #fff; text-decoration: underline; font-size: .9rem; }
+.jaar-rij { display: flex; align-items: center; gap: 8px; justify-content: space-between; min-height: 44px; }
+.jaar-rij + .jaar-rij { border-top: 1px solid var(--rand); }
 
 /* meldingen */
 #melding { position: sticky; top: 54px; z-index: 9; max-width: 760px; margin: 0 auto; padding: 0 16px; }

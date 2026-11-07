@@ -16,7 +16,14 @@
       <a href="{{ url_for('via', code=v.code) }}" class="via-link {{ 'actief' if request.view_args and request.view_args.get('code') == v.code }}">{{ v.code }}</a>
     {% endfor %}
     <a href="{{ url_for('aankopen') }}" class="{{ 'actief' if request.endpoint in ('aankopen', 'aankoop_nieuw', 'aankoop_bewerk') }}">Aankopen</a>
+    <a href="{{ url_for('jaren') }}" class="jaar-link {{ 'actief' if request.endpoint == 'jaren' }}" title="Jaar kiezen of aanmaken">{{ jaar }}</a>
   </nav>
+  {% if jaar != nieuwste_jaar %}
+  <form class="jaar-banner" method="post" action="{{ url_for('jaar_kiezen') }}">
+    <span>Je bekijkt <strong>{{ jaar }}</strong></span>
+    <button class="link" name="jaar" value="{{ nieuwste_jaar }}">naar {{ nieuwste_jaar }}</button>
+  </form>
+  {% endif %}
   {% endblock %}
   <div id="melding">
     {% with berichten = get_flashed_messages(with_categories=true) %}
