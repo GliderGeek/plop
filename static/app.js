@@ -285,6 +285,20 @@ document.addEventListener("htmx:afterSwap", () => {
   if (kaart?.dataset.compleet === "1") vier(kaart.querySelector("strong").textContent);
 });
 
+// Na een htmx-swap staat een brede tabel weer links; onthoud hoe ver je had gescrold.
+let tabelScroll = null;
+document.addEventListener("htmx:beforeSwap", (e) => {
+  if (e.detail.boosted) return; // echte paginawissel: niet herstellen
+  tabelScroll = [...document.querySelectorAll(".tabel-scroll")].map((el) => el.scrollLeft);
+});
+document.addEventListener("htmx:afterSwap", () => {
+  if (!tabelScroll) return;
+  document.querySelectorAll(".tabel-scroll").forEach((el, i) => {
+    if (tabelScroll[i]) el.scrollLeft = tabelScroll[i];
+  });
+  tabelScroll = null;
+});
+
 // Oogje bij het wachtwoordveld: laat zien wat je getypt hebt.
 document.addEventListener("click", (e) => {
   const knop = e.target.closest("[data-toon-wachtwoord]");

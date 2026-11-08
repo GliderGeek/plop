@@ -6,7 +6,7 @@ Een webapp om de champagne te beheren die we tijdens onze trip kopen voor onszel
 3. Achteraf: kosten verrekenen
 
 ## TODO
-- aanvinken fixen op mobiel
+- tbd
 
 ## Techniek
 
