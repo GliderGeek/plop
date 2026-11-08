@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import date
 from pathlib import Path
 
@@ -5,6 +6,7 @@ import pytest
 
 import db
 import logic
+import migraties
 from logic import ValidatieFout
 
 J = date.today().year  # het eerste jaar van een nieuwe database
@@ -242,7 +244,7 @@ def test_migratie_naar_bonnen_met_regels():
         INSERT INTO aankoop_verdeling VALUES (1,'dd',8),(1,'j',5),(1,'hm',3);
     """)
     db.init(c)
-    m = db.MIGRATIE_JAAR
+    m = migraties.MIGRATIE_JAAR
     assert logic.jaren(c) == [m]
     bon = logic.aankopen(c, m)[0]
     assert [(x["r"]["naam"], x["verdeling"]) for x in bon["regels"]] == [("Tissier Juliette", {"dd": 8, "j": 5, "hm": 3})]
@@ -487,14 +489,14 @@ def test_ongeldige_bedragen_geweigerd(conn, waarde):
 def test_kosten_alleen_over_de_vias_gelijk_en_niet_doorberekend(conn):
     logic.klant_opslaan(conn, J, None, "hm", "Piet", "", 0, 1, {})
     logic.aankoop_opslaan(conn, J, None, "T", [regel("Krug", {"hm": 1}, "luxe", "10")], betaald_door="hm")
-    logic.kosten_opslaan(conn, J, None, "Hotel", "100,01", "dd", verdeling="personen", deelnemers=db.PERSONEN)
+    logic.kosten_opslaan(conn, J, None, "Hotel", "100,01", "dd", verdeling="eigen", deelnemers=migraties.PERSONEN)
     vr = logic.verrekening(conn, J)
     assert [stand(vr, v)["eigen"] for v in ("dd", "j", "h", "m", "hm")] == [2501, 2500, 2500, 2500, 0]
     assert stand(vr, "dd")["saldo"] == 10001 - 2501 and stand(vr, "j")["saldo"] == -2500
     assert stand(vr, "hm")["saldo"] == 0 and sluit(vr) == 0
     assert logic.klant_bedragen(conn, J, "hm")["vrij"]["totaal"] == 1000
 
-    logic.kosten_opslaan(conn, J, None, "Tank", "50", "j", verdeling="personen", deelnemers=db.PERSONEN)
+    logic.kosten_opslaan(conn, J, None, "Tank", "50", "j", verdeling="eigen", deelnemers=migraties.PERSONEN)
     logic.kosten_opslaan(conn, J, None, "Diesel", "20", "j")
     b = logic.klant_bedragen(conn, J, "hm")
     assert b["vrij"]["kosten"] == 2000  # alleen Diesel; hm heeft alle wijn
@@ -506,28 +508,28 @@ def test_onbekende_kostenverdeling_geweigerd(conn):
 
 
 def test_eigen_kosten_alleen_over_de_deelnemers(conn):
-    hotel = logic.kosten_opslaan(conn, J, None, "Hotel", "30", "dd", verdeling="personen", deelnemers=["j", "dd"])
-    logic.kosten_opslaan(conn, J, None, "Diner", "5", "dd", verdeling="personen", deelnemers=["dd", "j", "h", "m", "hm"])
+    hotel = logic.kosten_opslaan(conn, J, None, "Hotel", "30", "dd", verdeling="eigen", deelnemers=["j", "dd"])
+    logic.kosten_opslaan(conn, J, None, "Diner", "5", "dd", verdeling="eigen", deelnemers=["dd", "j", "h", "m", "hm"])
     vr = logic.verrekening(conn, J)
     assert [stand(vr, v)["eigen"] for v in ("dd", "j", "h", "m", "hm")] == [1600, 1600, 100, 100, 100]
     assert sluit(vr) == 0
     assert logic.kosten(conn, J, hotel)[0]["deelnemers"] == ["dd", "j"]
 
-    logic.kosten_opslaan(conn, J, hotel, "Hotel", "30", "dd", verdeling="bestellers", deelnemers=["j"])
+    logic.kosten_opslaan(conn, J, hotel, "Hotel", "30", "dd", verdeling="reiskosten", deelnemers=["j"])
     assert logic.kosten(conn, J, hotel)[0]["deelnemers"] == []
 
 
 @pytest.mark.parametrize("deelnemers", [[], ["zz"]])
 def test_eigen_kosten_vragen_geldige_deelnemers(conn, deelnemers):
     with pytest.raises(ValidatieFout):
-        logic.kosten_opslaan(conn, J, None, "Hotel", "1", "dd", verdeling="personen", deelnemers=deelnemers)
+        logic.kosten_opslaan(conn, J, None, "Hotel", "1", "dd", verdeling="eigen", deelnemers=deelnemers)
 
 
 def test_bestaande_eigen_kosten_krijgen_iedereen_als_deelnemer(conn):
-    conn.execute("INSERT INTO kosten (jaar, omschrijving, bedrag, betaald_door, verdeling) VALUES (?, 'Hotel', 8, 'dd', 'personen')", (J,))
+    conn.execute("INSERT INTO kosten (jaar, omschrijving, bedrag, betaald_door, verdeling) VALUES (?, 'Hotel', 8, 'dd', 'eigen')", (J,))
     db.init(conn)
     db.init(conn)
-    assert logic.kosten(conn, J)[0]["deelnemers"] == db.PERSONEN
+    assert logic.kosten(conn, J)[0]["deelnemers"] == migraties.PERSONEN
 
 
 def test_namen_sorteren_hoofdletterongevoelig(conn):
@@ -559,7 +561,7 @@ def test_migratie_naar_jaren(tmp_path):
         INSERT INTO kosten_deelnemer VALUES (11, 'dd'), (11, 'j');
     """)
     db.init(c)
-    m = db.MIGRATIE_JAAR
+    m = migraties.MIGRATIE_JAAR
     assert logic.jaren(c) == [m]
     assert (tmp_path / "backups" / "oud.db.voor-jaren").exists()
     assert c.execute("PRAGMA foreign_key_check").fetchall() == []
@@ -568,19 +570,58 @@ def test_migratie_naar_jaren(tmp_path):
     assert piet["k"]["betaald"] and piet["vast"] == {1: 6} and piet["toekenningen"][0]["naam"] == "Krug"
     assert [(x["r"]["naam"], x["verdeling"]) for x in logic.aankopen(c, m)[0]["regels"]] == [
         ("Krug", {"dd": 2, "j": 1}), ("Pertois tradition", {"dd": 6})]
-    assert logic.kosten(c, m)[0]["deelnemers"] == ["dd", "j"]
+    assert logic.kosten(c, m)[0]["deelnemers"] == ["dd", "j"] and logic.kosten(c, m)[0]["k"]["verdeling"] == "eigen"
     assert {w["id"] for w in logic.wijnen(c, m)} == {1, 2, 3, 4, 9}
+    assert "prijs" not in migraties._kolommen(c, "wine")
     db.init(c)  # nog een keer: verandert niets
     assert logic.jaren(c) == [m] and len(logic.wijnen(c, m)) == 5
+
+
+def test_migratie_hernoemt_kostenverdeling(conn):
+    """Een database die al jaren heeft, maar nog de verdeling 'bestellers'/'personen'."""
+    conn.executescript(f"""
+        PRAGMA foreign_keys = OFF;
+        DROP TABLE kosten;
+        {migraties._tabel_sql("kosten", "kosten").replace("'reiskosten'", "'bestellers'").replace("'eigen'", "'personen'")};
+        INSERT INTO kosten (id, jaar, omschrijving, bedrag, betaald_door, verdeling)
+            VALUES (1, {J}, 'Tank', 50, 'j', 'bestellers'), (2, {J}, 'Hotel', 30, 'dd', 'personen');
+        INSERT INTO eigen_kosten_deelnemer VALUES (2, {J}, 'dd'), (2, {J}, 'j');
+        PRAGMA foreign_keys = ON;
+    """)
+    db.init(conn)
+    assert [(k["k"]["omschrijving"], k["k"]["verdeling"], k["deelnemers"]) for k in logic.kosten(conn, J)] == [
+        ("Tank", "reiskosten", []), ("Hotel", "eigen", ["dd", "j"])]
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("UPDATE kosten SET verdeling = 'personen' WHERE id = 1")
+
+
+def test_migratie_hernoemt_deelnemertabel(conn):
+    """Een database met jaren, maar nog met de tabel kosten_deelnemer."""
+    hotel = logic.kosten_opslaan(conn, J, None, "Hotel", "30", "dd", verdeling="eigen", deelnemers=["dd", "j"])
+    conn.execute("ALTER TABLE eigen_kosten_deelnemer RENAME TO kosten_deelnemer")
+    db.init(conn)  # maakt eerst een lege eigen_kosten_deelnemer, de migratie zet de oude ervoor in de plaats
+    assert not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'kosten_deelnemer'").fetchone()
+    assert logic.kosten(conn, J, hotel)[0]["deelnemers"] == ["dd", "j"]
+
+
+def test_migratie_verwijdert_wijnprijs(conn):
+    """Een database die al jaren heeft, maar nog de ongebruikte standaardprijs per wijn."""
+    conn.execute("ALTER TABLE wine ADD COLUMN prijs REAL")
+    conn.execute("UPDATE wine SET prijs = 19.3 WHERE is_vast = 1")
+    aantal = len(logic.wijnen(conn, J))
+    db.init(conn)
+    assert "prijs" not in migraties._kolommen(conn, "wine")
+    assert len(logic.wijnen(conn, J)) == aantal
 
 
 def test_nieuw_jaar_neemt_vias_en_basisflessen_over(conn):
     assert logic.jaar_aanmaken(conn, "2025") == 2025
     assert logic.jaren(conn) == sorted({J, 2025}, reverse=True)
     assert [v["code"] for v in logic.vias(conn, 2025)] == [v["code"] for v in logic.vias(conn, J)]
-    oud = [(w["naam"], w["prijs"]) for w in logic.wijnen(conn, J, vast=True)]
+    oud = [w["naam"] for w in logic.wijnen(conn, J, vast=True)]
     nieuw = logic.wijnen(conn, 2025, vast=True)
-    assert [(w["naam"], w["prijs"]) for w in nieuw] == oud
+    assert [w["naam"] for w in nieuw] == oud
     assert not {w["id"] for w in nieuw} & {w["id"] for w in logic.wijnen(conn, J)}
 
 
@@ -639,7 +680,7 @@ def test_jaar_verwijderen(conn, scenario):
     logic.jaar_verwijderen(conn, J)  # niet leeg: alles gaat mee
     assert logic.jaren(conn) == [2025]
     for t in ("klant", "klant_vast", "toekenning", "aankoop", "aankoop_regel", "regel_verdeling",
-              "kosten", "kosten_deelnemer"):
+              "kosten", "eigen_kosten_deelnemer"):
         assert conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] == 0, t
     assert not logic.kosten(conn, J, tank)
     assert [w["jaar"] for w in conn.execute("SELECT jaar FROM wine")] == [2025] * 4
@@ -659,3 +700,16 @@ def test_jaren_statistiek(conn, scenario):
     assert oud["flessen"] == {"basis": 0, "klein": 6, "iets_luxer": 0, "luxe": 2}
     assert (oud["totaal"], oud["euro"], oud["bestellingen"], oud["per_bestelling"]) == (8, 160, 0, 0)
     assert nieuw["bestellingen"] == 4 and nieuw["totaal"] == sum(nieuw["flessen"].values())
+
+
+def test_bestaand_jaar(conn):
+    assert logic.bestaand_jaar(conn, str(J)) == J
+    for fout in (str(J + 1), "abc", None):
+        with pytest.raises(ValidatieFout, match="Onbekend jaar"):
+            logic.bestaand_jaar(conn, fout)
+
+
+def test_via(conn):
+    assert logic.via(conn, J, "dd")["code"] == "dd"
+    assert logic.via(conn, J, "xx") is None
+    assert logic.via(conn, J + 1, "dd") is None

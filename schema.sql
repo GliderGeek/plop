@@ -19,13 +19,11 @@ CREATE TABLE IF NOT EXISTS via (
 -- categorie: basis | iets_luxer | luxe
 -- is_vast: de vaste basisflessen (startdata); die en alleen die hebben categorie 'basis'.
 --          Ze worden per fles besteld en lopen net als de rest via bonnen.
--- prijs: standaardprijs uit de startdata (nu niet gebruikt; de prijs staat per aankoopregel)
 CREATE TABLE IF NOT EXISTS wine (
     id INTEGER PRIMARY KEY,
     jaar INTEGER NOT NULL REFERENCES jaar(jaar),
     naam TEXT NOT NULL,
     categorie TEXT NOT NULL CHECK (categorie IN ('basis', 'iets_luxer', 'luxe')),
-    prijs REAL,
     is_vast INTEGER NOT NULL DEFAULT 0,
     UNIQUE (jaar, naam)
 );
@@ -97,16 +95,16 @@ CREATE TABLE IF NOT EXISTS kosten (
     omschrijving TEXT NOT NULL,
     bedrag REAL,
     betaald_door TEXT,
-    -- bestellers (reiskosten): naar rato van de wijn, doorberekend aan de bestellingen;
-    -- personen (eigen kosten): gelijk over de deelnemers
-    verdeling TEXT NOT NULL DEFAULT 'bestellers' CHECK (verdeling IN ('bestellers', 'personen')),
+    -- reiskosten: over alle bestellers naar rato van de wijn, doorberekend aan de bestellingen;
+    -- eigen: gelijk over de deelnemers (eigen_kosten_deelnemer), niet doorberekend
+    verdeling TEXT NOT NULL DEFAULT 'reiskosten' CHECK (verdeling IN ('reiskosten', 'eigen')),
     aangemaakt_op TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     versie INTEGER NOT NULL DEFAULT 0,  -- tegen het overschrijven van andermans wijziging
     FOREIGN KEY (jaar, betaald_door) REFERENCES via(jaar, code)
 );
 
--- wie meedoet aan eigen kosten; jaar: dat van de post
-CREATE TABLE IF NOT EXISTS kosten_deelnemer (
+-- wie meedoet aan een post met verdeling 'eigen' (bij reiskosten leeg); jaar: dat van de post
+CREATE TABLE IF NOT EXISTS eigen_kosten_deelnemer (
     kosten_id INTEGER NOT NULL REFERENCES kosten(id) ON DELETE CASCADE,
     jaar INTEGER NOT NULL,
     via TEXT NOT NULL,

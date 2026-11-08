@@ -156,7 +156,7 @@ input, select, textarea {
 .rij > label.breed { flex: 3 1 180px; }
 .rij.aantallen { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }  /* gelijke breedtes, ook na afbreken */
 fieldset { border: 1px solid var(--rand); border-radius: 8px; margin: 0 0 8px; }
-form:has(option[value=bestellers]:checked) .deelnemers { display: none; }
+form:has(option[value=reiskosten]:checked) .deelnemers { display: none; }
 .deelnemers-kop { display: flex; justify-content: space-between; align-items: baseline; font-size: .85rem; color: var(--zacht); }
 .deelnemers-kop .link { font-size: .85rem; text-decoration: underline; }
 .deelnemers-keuze { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 8px; }

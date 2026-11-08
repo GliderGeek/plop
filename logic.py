@@ -13,8 +13,8 @@ CATEGORIEEN = {
 }
 ZOEK_CATEGORIEEN = ["iets_luxer", "luxe"]  # tijdens de trip te kopen
 KOSTEN_VERDELINGEN = {
-    "bestellers": "Reiskosten",
-    "personen": "Eigen kosten",
+    "reiskosten": "Reiskosten",
+    "eigen": "Eigen kosten",
 }
 
 
@@ -31,6 +31,10 @@ def jaren(conn):
 
 def vias(conn, jaar):
     return conn.execute("SELECT * FROM via WHERE jaar = ? ORDER BY volgorde", (jaar,)).fetchall()
+
+
+def via(conn, jaar, code):
+    return conn.execute("SELECT * FROM via WHERE jaar = ? AND code = ?", (jaar, code)).fetchone()
 
 
 def wijnen(conn, jaar, vast=None):
@@ -269,7 +273,7 @@ def kosten(conn, jaar, kosten_id=None):
     """Overige aankopen met deelnemers en wat er nog ontbreekt, oudste eerst."""
     deelnemers = defaultdict(list)
     for r in conn.execute(
-        """SELECT d.kosten_id, d.via FROM kosten_deelnemer d
+        """SELECT d.kosten_id, d.via FROM eigen_kosten_deelnemer d
            JOIN via ON via.jaar = d.jaar AND via.code = d.via
            WHERE d.jaar = ? ORDER BY via.volgorde""",
         (jaar,),
@@ -336,7 +340,7 @@ def verrekening(conn, jaar):
         if p["k"]["bedrag"] is None:
             continue
         c = _cent(p["k"]["bedrag"])
-        if p["k"]["verdeling"] == "personen":
+        if p["k"]["verdeling"] == "eigen":
             for via, n in _verdeel(c, {d: 1 for d in p["deelnemers"]}).items():
                 eigen[via] += n
         else:
@@ -652,7 +656,7 @@ def aankoop_verwijderen(conn, jaar, aankoop_id):
 
 # --- overige aankopen -------------------------------------------------------------
 
-def kosten_opslaan(conn, jaar, kosten_id, omschrijving, bedrag, betaald_door, versie=None, verdeling="bestellers",
+def kosten_opslaan(conn, jaar, kosten_id, omschrijving, bedrag, betaald_door, versie=None, verdeling="reiskosten",
                    deelnemers=()):
     """Nieuwe post (kosten_id leeg) of bestaande bijwerken; het bedrag mag leeg blijven.
     deelnemers: wie meedoet aan eigen kosten; bij reiskosten genegeerd."""
@@ -664,7 +668,7 @@ def kosten_opslaan(conn, jaar, kosten_id, omschrijving, bedrag, betaald_door, ve
         raise ValidatieFout(f"{omschrijving}: kies wie het betaald heeft.")
     if verdeling not in KOSTEN_VERDELINGEN:
         raise ValidatieFout(f"{omschrijving}: kies een categorie.")
-    if verdeling != "personen":
+    if verdeling != "eigen":
         deelnemers = ()
     elif not deelnemers:
         raise ValidatieFout(f"{omschrijving}: kies wie er meedoet.")
@@ -685,8 +689,8 @@ def kosten_opslaan(conn, jaar, kosten_id, omschrijving, bedrag, betaald_door, ve
                 "INSERT INTO kosten (jaar, omschrijving, bedrag, betaald_door, verdeling) VALUES (?, ?, ?, ?, ?)",
                 (jaar, omschrijving, bedrag, betaald_door, verdeling),
             ).lastrowid
-        conn.execute("DELETE FROM kosten_deelnemer WHERE kosten_id=?", (kosten_id,))
-        conn.executemany("INSERT INTO kosten_deelnemer (kosten_id, jaar, via) VALUES (?, ?, ?)",
+        conn.execute("DELETE FROM eigen_kosten_deelnemer WHERE kosten_id=?", (kosten_id,))
+        conn.executemany("INSERT INTO eigen_kosten_deelnemer (kosten_id, jaar, via) VALUES (?, ?, ?)",
                          [(kosten_id, jaar, via) for via in set(deelnemers)])
     return kosten_id
 
@@ -794,22 +798,28 @@ def toekenning_aanvullen(conn, jaar, klant_id, wine_id):
 # --- jaren --------------------------------------------------------------------
 
 def jaar_aanmaken(conn, jaar):
-    """Nieuw jaar. Via's en vaste basisflessen (met prijs) komen van het nieuwste jaar,
-    of uit de startdata als er nog geen jaar is."""
+    """Nieuw jaar. Via's en vaste basisflessen komen van het nieuwste jaar
+    (er is er altijd een: db.init maakt het eerste en het laatste kan niet weg)."""
     jaar = _int(jaar, "Jaar", 2000)
     if jaar > 2100:
         raise ValidatieFout("Jaar moet tussen 2000 en 2100 liggen.")
     with tx(conn):
         if conn.execute("SELECT 1 FROM jaar WHERE jaar = ?", (jaar,)).fetchone():
             raise ValidatieFout(f"{jaar} bestaat al.")
-        bron = next(iter(jaren(conn)), None)
-        if bron is None:
-            via_lijst = db.VIAS
-            vaste = [(naam, prijs) for naam, _cat, prijs in db.VASTE_WIJNEN]
-        else:
-            via_lijst = [(v["code"], v["naam"]) for v in vias(conn, bron)]
-            vaste = [(w["naam"], w["prijs"]) for w in wijnen(conn, bron, vast=True)]
-        db.maak_jaar(conn, jaar, via_lijst, vaste)
+        bron = jaren(conn)[0]
+        db.maak_jaar(conn, jaar, [(v["code"], v["naam"]) for v in vias(conn, bron)],
+                     [w["naam"] for w in wijnen(conn, bron, vast=True)])
+    return jaar
+
+
+def bestaand_jaar(conn, jaar):
+    """Jaar uit het formulier dat al bestaat, anders ValidatieFout."""
+    try:
+        jaar = int(jaar)
+    except (TypeError, ValueError):
+        jaar = None
+    if jaar not in jaren(conn):
+        raise ValidatieFout("Onbekend jaar.")
     return jaar
 
 

@@ -161,6 +161,11 @@ def test_paginas_renderen(client):
         assert client.get(url).status_code == 200, url
 
 
+def test_onbekende_via_gaat_naar_overzicht(client):
+    r = client.get("/via/xx")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/")
+
+
 def test_klant_compleet_na_laatste_fles(client, conn):
     klant_id = logic.klant_opslaan(conn, J, None, "dd", "Piet", "", 0, 1, {})
     logic.aankoop_opslaan(conn, J, None, "", [{"naam": "Krug", "categorie": "luxe", "verdeling": {"dd": 1}}])
@@ -196,19 +201,19 @@ def test_aankoop_met_betaler_en_waarschuwingen(client, conn):
 
 
 def test_kosten_toevoegen_bewerken_verwijderen(client, conn):
-    r = client.post("/kosten", data={"omschrijving": "Tank", "bedrag": "", "betaald_door": "j", "verdeling": "bestellers"})
+    r = client.post("/kosten", data={"omschrijving": "Tank", "bedrag": "", "betaald_door": "j", "verdeling": "reiskosten"})
     assert r.status_code == 303
     k = logic.kosten(conn, J)[0]["k"]
     assert "Tank: bedrag ontbreekt" in client.get("/").text
     assert f'action="/kosten/{k["id"]}"' in client.get("/aankopen").text
 
-    r = client.post(f"/kosten/{k['id']}", headers=HTMX, data={"omschrijving": "Tank", "betaald_door": "j", "verdeling": "bestellers", "versie": k["versie"] + 1})
+    r = client.post(f"/kosten/{k['id']}", headers=HTMX, data={"omschrijving": "Tank", "betaald_door": "j", "verdeling": "reiskosten", "versie": k["versie"] + 1})
     assert r.headers["HX-Retarget"] == "#melding" and "intussen gewijzigd" in r.text
 
     client.post(f"/kosten/{k['id']}", data={"omschrijving": "Tank", "bedrag": "40,5", "betaald_door": "h",
-                                            "verdeling": "personen", "deelnemers": ["dd", "m"], "versie": k["versie"]})
+                                            "verdeling": "eigen", "deelnemers": ["dd", "m"], "versie": k["versie"]})
     k = logic.kosten(conn, J)[0]["k"]
-    assert (k["bedrag"], k["betaald_door"], k["verdeling"]) == (40.5, "h", "personen")
+    assert (k["bedrag"], k["betaald_door"], k["verdeling"]) == (40.5, "h", "eigen")
     assert logic.kosten(conn, J)[0]["deelnemers"] == ["dd", "m"]
     tekst = client.get("/aankopen").text
     assert 'value="dd" checked' in tekst and 'value="j" >' in tekst and "alle selecteren" in tekst
