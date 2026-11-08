@@ -6,8 +6,6 @@ Een webapp om de champagne te beheren die we tijdens onze trip kopen voor onszel
 3. Achteraf: kosten verrekenen
 
 ## TODO
-- code opschonen en open-source zetten
-  - licentie erop
 - aanvinken fixen op mobiel
 
 ## Techniek
@@ -17,6 +15,8 @@ Een webapp om de champagne te beheren die we tijdens onze trip kopen voor onszel
 - SQLite
 
 Meer info over de technische setup in `docs.md`
+
+Voor de ontwikkeling van deze app is AI gebruikt
 
 ## Ontwikkelen
 

@@ -392,6 +392,8 @@ a.knop.secundair { font-weight: 500; }
 
 .credit { padding: 16px; color: var(--zacht); font-size: .75rem; text-align: center; }
 .credit a { color: inherit; }
+.credit .github { display: inline-block; vertical-align: -2px; }
+.credit .github:hover { color: var(--tekst); }
 
 /* verrekening */
 .kaart > .waarschuwing-tekst:first-child { margin: 0 0 8px; }
