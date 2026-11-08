@@ -163,12 +163,14 @@ def _tabel_sql(tabel, nieuwe_naam):
 
 def _voeg_jaren_toe(conn):
     """Alles van vóór de jaren hoort bij MIGRATIE_JAAR. De tabellen met een via of een unieke naam
-    krijgen een jaar in hun sleutel, dus die worden opnieuw opgebouwd. Vooraf een kopie van de database."""
+    krijgen een jaar in hun sleutel, dus die worden opnieuw opgebouwd. Vooraf een kopie van de database in backups/."""
     if "jaar" in _kolommen(conn, "via"):
         return
     pad = conn.execute("PRAGMA database_list").fetchone()["file"]
     if pad:
-        kopie = sqlite3.connect(pad + ".voor-jaren")
+        map_ = Path(pad).parent / "backups"
+        map_.mkdir(exist_ok=True)
+        kopie = sqlite3.connect(map_ / (Path(pad).name + ".voor-jaren"))
         try:
             conn.backup(kopie)
         finally:

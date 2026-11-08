@@ -811,3 +811,50 @@ def jaar_aanmaken(conn, jaar):
             vaste = [(w["naam"], w["prijs"]) for w in wijnen(conn, bron, vast=True)]
         db.maak_jaar(conn, jaar, via_lijst, vaste)
     return jaar
+
+
+def jaren_inhoud(conn):
+    """Per jaar (nieuwste eerst) hoeveel bestellingen, bonnen en overige aankopen erin staan."""
+    tel = {t: dict(conn.execute(f"SELECT jaar, COUNT(*) FROM {t} GROUP BY jaar").fetchall())
+           for t in ("klant", "aankoop", "kosten")}
+    return [{"jaar": j, "bestellingen": tel["klant"].get(j, 0), "bonnen": tel["aankoop"].get(j, 0),
+             "kosten": tel["kosten"].get(j, 0)} for j in jaren(conn)]
+
+
+def jaar_verwijderen(conn, jaar):
+    """Een jaar met alles erin weghalen. Het laatste jaar blijft."""
+    jaar = _int(jaar, "Jaar")
+    with tx(conn):
+        alle = jaren(conn)
+        if jaar not in alle:
+            raise ValidatieFout(f"{jaar} bestaat niet (meer).")
+        if alle == [jaar]:
+            raise ValidatieFout("Het laatste jaar kan niet weg.")
+        # klant, aankoop en kosten nemen hun toekenningen, regels en deelnemers mee (cascade)
+        for t in ("klant", "aankoop", "kosten", "wine", "via", "jaar"):
+            conn.execute(f"DELETE FROM {t} WHERE jaar = ?", (jaar,))
+
+
+SOORTEN = {"basis": "Basis", "klein": "Halve flessen", "iets_luxer": "Iets luxer", "luxe": "Luxe"}
+
+
+def jaren_statistiek(conn):
+    """Per jaar (oudste eerst): bestellingen, gekochte flessen per soort (basis apart van de halve
+    flessen), wat de wijn kostte en flessen per bestelling."""
+    uit = []
+    for j in sorted(jaren(conn)):
+        flessen = dict.fromkeys(SOORTEN, 0)
+        cent = 0
+        for b in aankopen(conn, j):
+            cent += b["cent"]
+            for x in b["regels"]:
+                r = x["r"]
+                soort = r["categorie"]
+                if soort == "basis" and "½" in r["naam"]:
+                    soort = "klein"
+                flessen[soort] += r["aantal"]
+        bestellingen = sum(1 for k in klanten(conn, j) if k["totaal"])
+        totaal = sum(flessen.values())
+        uit.append({"jaar": j, "bestellingen": bestellingen, "flessen": flessen, "totaal": totaal,
+                    "euro": cent / 100, "per_bestelling": totaal / bestellingen if bestellingen else 0})
+    return uit

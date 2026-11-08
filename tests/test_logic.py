@@ -561,7 +561,7 @@ def test_migratie_naar_jaren(tmp_path):
     db.init(c)
     m = db.MIGRATIE_JAAR
     assert logic.jaren(c) == [m]
-    assert (tmp_path / "oud.db.voor-jaren").exists()
+    assert (tmp_path / "backups" / "oud.db.voor-jaren").exists()
     assert c.execute("PRAGMA foreign_key_check").fetchall() == []
     assert [v["code"] for v in logic.vias(c, m)] == ["dd", "j", "h", "m", "hm"] and logic.vias(c, m)[0]["verrekend"]
     piet = logic.klant(c, m, 5)
@@ -628,3 +628,34 @@ def test_ids_van_een_ander_jaar_zijn_onbekend(conn, scenario):
     logic.kosten_verwijderen(conn, 2025, tank)
     assert logic.klant(conn, J, scenario["joris"]) and logic.aankopen(conn, J, scenario["bon"])
     assert logic.kosten(conn, J, tank)
+
+
+def test_jaar_verwijderen(conn, scenario):
+    logic.jaar_aanmaken(conn, 2025)
+    tank = logic.kosten_opslaan(conn, J, None, "Tank", "10", "dd")
+    inhoud = {j["jaar"]: j for j in logic.jaren_inhoud(conn)}
+    assert inhoud[2025] == {"jaar": 2025, "bestellingen": 0, "bonnen": 0, "kosten": 0}
+    assert inhoud[J]["bestellingen"] == 4 and inhoud[J]["bonnen"] == 1 and inhoud[J]["kosten"] == 1
+    logic.jaar_verwijderen(conn, J)  # niet leeg: alles gaat mee
+    assert logic.jaren(conn) == [2025]
+    for t in ("klant", "klant_vast", "toekenning", "aankoop", "aankoop_regel", "regel_verdeling",
+              "kosten", "kosten_deelnemer"):
+        assert conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] == 0, t
+    assert not logic.kosten(conn, J, tank)
+    assert [w["jaar"] for w in conn.execute("SELECT jaar FROM wine")] == [2025] * 4
+    with pytest.raises(ValidatieFout, match="laatste jaar"):
+        logic.jaar_verwijderen(conn, 2025)
+    with pytest.raises(ValidatieFout):
+        logic.jaar_verwijderen(conn, 1999)
+
+
+def test_jaren_statistiek(conn, scenario):
+    logic.jaar_aanmaken(conn, 2025)
+    logic.klant_opslaan(conn, 2025, None, "dd", "Piet", "", 0, 0, {})  # bestelt niets: telt niet
+    logic.aankoop_opslaan(conn, 2025, None, "B", [regel("Pertois ½", {"dd": 6}, None, "10"),
+                                                  regel("Krug", {"j": 2}, "luxe", "50")])
+    oud, nieuw = logic.jaren_statistiek(conn)
+    assert oud["jaar"] == 2025 and nieuw["jaar"] == J
+    assert oud["flessen"] == {"basis": 0, "klein": 6, "iets_luxer": 0, "luxe": 2}
+    assert (oud["totaal"], oud["euro"], oud["bestellingen"], oud["per_bestelling"]) == (8, 160, 0, 0)
+    assert nieuw["bestellingen"] == 4 and nieuw["totaal"] == sum(nieuw["flessen"].values())

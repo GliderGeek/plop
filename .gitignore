@@ -6,7 +6,9 @@
 # database met echte gegevens
 *.db
 *.db-journal
-*.db.voor-jaren
+
+# lokale kopieën van de database
+backups/
 
 .env
 

@@ -20,11 +20,10 @@ Het overzicht heeft per fase een inklapbare sectie: *Besteld*, *Nog te kopen* en
 
 Er zijn geen rollen of gebruikers: iedereen deelt één wachtwoord en kan daarna alles. De browser blijft een jaar ingelogd.
 
-Elk jaar (elke trip) staat los. Rechts in de navigatie staat het jaar dat je bekijkt; daar kies je een ander jaar of maak je een nieuw jaar aan, dat de via's en basisflessen van het nieuwste jaar overneemt. De browser onthoudt welk jaar je bekijkt. Bekijk je niet het nieuwste jaar, dan zegt een balk onder de navigatie dat, zodat je niet per ongeluk in een oud jaar bewerkt. De backup is per jaar.
+Elk jaar (elke trip) staat los. Rechts in de navigatie staat het jaar dat je bekijkt; dat opent een menu om een ander jaar te kiezen of naar de Instellingen te gaan. Daar maak je een nieuw jaar aan, dat de via's en basisflessen van het nieuwste jaar overneemt. De browser onthoudt welk jaar je bekijkt. Bekijk je niet het nieuwste jaar, dan zegt een balk onder de navigatie dat, zodat je niet per ongeluk in een oud jaar bewerkt. De backup is per jaar. *Over de jaren* (ook in dat menu) vergelijkt de jaren: bestellingen, flessen per bestelling en de gekochte flessen per soort.
 
 ## TODO
-
-- lijstje via's configureerbaar maken (per jaar, op de pagina Jaren)
+- lijstje via's configureerbaar maken (per jaar, op de pagina Instellingen)
 
 ## Techniek
 
@@ -42,7 +41,7 @@ Elk jaar (elke trip) staat los. Rechts in de navigatie staat het jaar dat je bek
 | `templates/`, `static/` | Pagina's, partials, CSS en een beetje JS voor het aankoopformulier en het feestje als een bestelling compleet is |
 | `tests/` | Unit-tests voor `logic.py` en route-tests voor `app.py` |
 
-Alles hoort bij een jaar (tabel `jaar`). `via`, `wine`, `klant`, `aankoop` en `kosten` hebben een kolom `jaar`; een via is uniek per jaar (`(jaar, code)`) en een wijnnaam ook. `regel_verdeling` en `kosten_deelnemer` hebben het jaar van hun bon of post, zodat de foreign key naar `via(jaar, code)` alleen via's van hetzelfde jaar toelaat. Elke functie in `logic.py` krijgt het jaar mee en filtert erop, ook bij opzoeken op id: een id uit een ander jaar bestaat voor die functie niet. Data van vóór de jaren is bij de migratie in 2026 gezet (met een kopie `champagne.db.voor-jaren`).
+Alles hoort bij een jaar (tabel `jaar`). `via`, `wine`, `klant`, `aankoop` en `kosten` hebben een kolom `jaar`; een via is uniek per jaar (`(jaar, code)`) en een wijnnaam ook. `regel_verdeling` en `kosten_deelnemer` hebben het jaar van hun bon of post, zodat de foreign key naar `via(jaar, code)` alleen via's van hetzelfde jaar toelaat. Elke functie in `logic.py` krijgt het jaar mee en filtert erop, ook bij opzoeken op id: een id uit een ander jaar bestaat voor die functie niet. Data van vóór de jaren is bij de migratie in 2026 gezet (met een kopie `backups/champagne.db.voor-jaren`).
 
 Een aankoop (`aankoop`) heeft regels (`aankoop_regel`) met elk een verdeling over de via's (`regel_verdeling`). Wijnen worden niet apart beheerd: een regel verwijst naar een wijn op naam (hoofdletterongevoelig), die automatisch wordt aangemaakt en weer verdwijnt als hij op geen enkele bon meer staat. Overdragen tussen via's past de verdeling van de regels aan (nieuwste eerst) en wordt niet apart opgeslagen. Elke wijziging draait in een transactie (`BEGIN IMMEDIATE`, zodat gelijktijdige acties op elkaar wachten) met een consistentiecheck, die alles terugdraait als een via meer flessen toegekend zou hebben dan hij bezit. Bonnen en klanten hebben een `versie`: wie een bewerkformulier opslaat terwijl iemand anders die bon of klant intussen heeft gewijzigd (ook door een overdracht), krijgt een melding in plaats van andermans wijziging te overschrijven.
 

@@ -77,6 +77,7 @@ def globals_():
         "CATEGORIEEN": CATEGORIEEN,
         "KOSTEN_VERDELINGEN": KOSTEN_VERDELINGEN,
         "ZOEK_CATEGORIEEN": ZOEK_CATEGORIEEN,
+        "SOORTEN": logic.SOORTEN,
         "alle_vias": logic.vias(get_conn(), jaar),
         "jaar": jaar,
         "alle_jaren": alle_jaren(),
@@ -348,9 +349,9 @@ def kosten_verwijder(kosten_id):
 
 # --- jaren -------------------------------------------------------------------
 
-@app.get("/jaren")
-def jaren():
-    return render_template("jaren.html")
+@app.get("/instellingen")
+def instellingen():
+    return render_template("instellingen.html", jaren_inhoud=logic.jaren_inhoud(get_conn()))
 
 
 @app.post("/jaren")
@@ -370,3 +371,44 @@ def jaar_kiezen():
         raise ValidatieFout("Onbekend jaar.")
     session["jaar"] = jaar
     return redirect(url_for("overzicht"), code=303)
+
+
+@app.post("/jaar/<int:jaar>/verwijder")
+def jaar_verwijder(jaar):
+    logic.jaar_verwijderen(get_conn(), jaar)
+    flash(f"{jaar} verwijderd.", "ok")
+    return redirect(url_for("instellingen"), code=303)
+
+
+# --- over de jaren -----------------------------------------------------------
+
+def kolommen_grafiek(stat, hoogte=180, boven=28, breedte=24, gat=2):
+    """Gestapelde kolommen per jaar als SVG-geometrie. x in procenten (de grafiek rekt mee),
+    y in px. Elke kolom: segmenten van onder naar boven, alleen de bovenste met ronde hoeken."""
+    top = max((r["totaal"] for r in stat), default=0)
+    stap = 100 if top <= 500 else 200
+    schaal_max = max(stap, -(-top // stap) * stap)
+    y = lambda v: boven + hoogte * (1 - v / schaal_max)
+    h = breedte / 2
+    kolommen = []
+    for i, r in enumerate(stat):
+        delen, onder = [], 0
+        zichtbaar = [s for s in logic.SOORTEN if r["flessen"][s]]
+        for s in zichtbaar:
+            n = r["flessen"][s]
+            yt, yb = y(onder + n), y(onder) - (gat if onder else 0)
+            if s == zichtbaar[-1] and yb - yt > 4:  # bovenkant rond, onderkant recht
+                d = f"M{-h},{yb:.1f}V{yt + 4:.1f}A4,4 0 0 1 {-h + 4},{yt:.1f}H{h - 4}A4,4 0 0 1 {h},{yt + 4:.1f}V{yb:.1f}Z"
+            else:
+                d = f"M{-h},{yb:.1f}V{yt:.1f}H{h}V{yb:.1f}Z"
+            delen.append({"soort": s, "n": n, "d": d})
+            onder += n
+        kolommen.append({"r": r, "x": 12 + (i + 0.5) * 88 / len(stat), "delen": delen, "top": y(onder)})
+    ticks = [{"v": v, "y": y(v)} for v in range(0, schaal_max + 1, stap)]
+    return {"kolommen": kolommen, "ticks": ticks, "basis": y(0), "hoogte": boven + hoogte + 32}
+
+
+@app.get("/over-de-jaren")
+def over_de_jaren():
+    stat = logic.jaren_statistiek(get_conn())
+    return render_template("over_de_jaren.html", stat=stat, grafiek=kolommen_grafiek(stat))

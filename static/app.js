@@ -296,3 +296,29 @@ document.addEventListener("click", (e) => {
   knop.title = knop.ariaLabel = tonen ? "Wachtwoord verbergen" : "Wachtwoord tonen";
   veld.focus();
 });
+
+// Grafiek 'Over de jaren': tooltip bij hover en focus op een segment (data-tip). Via document,
+// zodat het blijft werken nadat htmx de pagina heeft vervangen.
+function toonTip(el, x, y) {
+  const tip = document.getElementById("grafiek-tip");
+  if (!tip) return;
+  tip.textContent = el.dataset.tip;
+  tip.hidden = false;
+  tip.style.left = Math.min(x + 12, window.innerWidth - tip.offsetWidth - 8) + "px";
+  tip.style.top = y - tip.offsetHeight - 10 + "px";
+}
+function verbergTip() {
+  const tip = document.getElementById("grafiek-tip");
+  if (tip) tip.hidden = true;
+}
+document.addEventListener("pointermove", (e) => {
+  const el = e.target.closest && e.target.closest("[data-tip]");
+  el ? toonTip(el, e.clientX, e.clientY) : verbergTip();
+});
+document.addEventListener("focusin", (e) => {
+  const el = e.target.closest && e.target.closest("[data-tip]");
+  if (!el) return verbergTip();
+  const r = el.getBoundingClientRect();
+  toonTip(el, r.left + r.width / 2, r.top);
+});
+document.addEventListener("focusout", verbergTip);

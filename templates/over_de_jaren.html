@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block main %}
+{% set eerste, laatste = stat[0], stat[-1] %}
+{% set bestellingen = stat|map(attribute='bestellingen')|list %}
+<h1>Over de jaren</h1>
+{% if stat|length > 1 %}
+{% set stabiel = (bestellingen|max - bestellingen|min) <= 0.15 * bestellingen|max %}
+<p class="lead">
+  {% if stabiel and laatste.per_bestelling > 1.2 * eerste.per_bestelling %}
+  Elk jaar ongeveer evenveel bestellingen ({{ bestellingen|min }}–{{ bestellingen|max }}), maar per bestelling
+  gaan er steeds meer flessen mee: van {{ eerste.per_bestelling|round(1)|getal }} in {{ eerste.jaar }}
+  naar {{ laatste.per_bestelling|round(1)|getal }} in {{ laatste.jaar }}.
+  {% else %}
+  Van {{ eerste.jaar }} tot {{ laatste.jaar }}: {{ eerste.bestellingen }} → {{ laatste.bestellingen }} bestellingen,
+  {{ eerste.per_bestelling|round(1)|getal }} → {{ laatste.per_bestelling|round(1)|getal }} flessen per bestelling.
+  {% endif %}
+</p>
+
+{% endif %}
+
+<div class="kaart grafiek-kaart">
+  <h2>Gekochte flessen per jaar</h2>
+  <ul class="legenda">
+    {% for s, naam in SOORTEN.items() %}<li><span class="sleutel serie-{{ s }}"></span>{{ naam }}</li>{% endfor %}
+  </ul>
+  <svg class="grafiek" width="100%" height="{{ grafiek.hoogte }}" role="img"
+       aria-label="Gestapelde kolommen: gekochte flessen per jaar, per soort. De tabel hieronder geeft dezelfde cijfers.">
+    {% for t in grafiek.ticks %}
+    <line class="{{ 'as' if t.v == 0 else 'raster' }}" x1="0" x2="100%" y1="{{ t.y }}" y2="{{ t.y }}"></line>
+    <text class="as-tekst" x="0" y="{{ t.y - 4 }}">{{ t.v }}</text>
+    {% endfor %}
+    {% for k in grafiek.kolommen %}
+    <svg x="{{ k.x }}%" overflow="visible">
+      {% for d in k.delen %}
+      <path class="serie-{{ d.soort }}" d="{{ d.d }}" tabindex="0"
+            data-tip="{{ k.r.jaar }} · {{ SOORTEN[d.soort] }}: {{ d.n }} flessen"></path>
+      {% endfor %}
+      <text class="kap" x="0" y="{{ k.top - 6 }}">{{ k.r.totaal }}</text>
+      <text class="jaar-as" x="0" y="{{ grafiek.basis + 20 }}">{{ k.r.jaar }}</text>
+    </svg>
+    {% endfor %}
+  </svg>
+  <details class="tabel-weergave">
+    <summary>Als tabel</summary>
+    <div class="tabel-scroll">
+      <table class="overzicht">
+        <thead><tr><th>Jaar</th>{% for naam in SOORTEN.values() %}<th>{{ naam }}</th>{% endfor %}<th>Totaal</th><th>Bestellingen</th><th>Per bestelling</th><th>Champagne</th></tr></thead>
+        <tbody>
+          {% for r in stat %}
+          <tr><th>{{ r.jaar }}</th>{% for s in SOORTEN %}<td>{{ r.flessen[s] }}</td>{% endfor %}
+            <td>{{ r.totaal }}</td><td>{{ r.bestellingen }}</td><td>{{ r.per_bestelling|round(1)|getal }}</td><td>{{ r.euro|euro }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+</div>
+<div id="grafiek-tip" class="grafiek-tip" hidden></div>
+{% endblock %}

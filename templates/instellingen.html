@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "partials/iconen.html" import icoon %}
+{% block main %}
+<h1>Instellingen</h1>
+
+<h2>Jaren</h2>
+<div class="kaart">
+  {% for j in jaren_inhoud %}
+  {% set leeg = not (j.bestellingen or j.bonnen or j.kosten) %}
+  <div class="jaar-rij">
+    <strong>{{ j.jaar }}</strong>
+    <span class="klein-tekst">
+      {%- if leeg %}leeg{% else %}{{ j.bestellingen }} bestellingen · {{ j.bonnen }} bonnen{% if j.kosten %} · {{ j.kosten }} overige aankopen{% endif %}{% endif -%}
+    </span>
+    {% if jaren_inhoud|length > 1 %}
+    <form method="post" action="{{ url_for('jaar_verwijder', jaar=j.jaar) }}"
+          hx-confirm="{% if leeg %}{{ j.jaar }} verwijderen?{% else %}Let op: {{ j.jaar }} is niet leeg. {{ j.bestellingen }} bestellingen, {{ j.bonnen }} bonnen{% if j.kosten %} en {{ j.kosten }} overige aankopen{% endif %} gaan definitief weg. {{ j.jaar }} verwijderen?{% endif %}">
+      <button class="icoon-knop gevaar-tekst" title="{{ j.jaar }} verwijderen" aria-label="{{ j.jaar }} verwijderen">{{ icoon('prullenbak') }}</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<h2>Nieuw jaar</h2>
+<form class="kaart" method="post" action="{{ url_for('jaar_nieuw') }}">
+  <div class="rij">
+    <label>Jaar <input type="number" name="jaar" min="2000" max="2100" required inputmode="numeric"></label>
+  </div>
+  <button>Aanmaken</button>
+</form>
+{% endblock %}

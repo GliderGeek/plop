@@ -66,19 +66,35 @@ a { color: var(--accent); }
 .nav a.actief { background: var(--bg); }
 .nav a.via-link { min-width: 40px; text-align: center; }
 /* jaarkeuze: rechts in de nav (op een telefoon achteraan in de scrollende balk), geen via */
-.nav a.jaar-link {
-  margin-left: auto; align-self: center; padding: 4px 10px; font-size: .85rem;
-  color: var(--zacht); border: 1px solid var(--rand); border-radius: 999px;
+.nav .jaar-link {
+  flex: none; margin-left: auto; align-self: center; min-height: 0; padding: 4px 10px; font-size: .85rem;
+  background: none; color: var(--tekst); border: 1px solid var(--rand); border-radius: 999px; font-weight: 600;
 }
-.nav a.jaar-link.actief { color: var(--tekst); }
+.jaar-menu {
+  position: fixed; inset: 52px 12px auto auto; margin: 0; padding: 4px; min-width: 160px;
+  background: var(--kaart); color: var(--tekst); border: 1px solid var(--rand); border-radius: 10px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / .15);
+}
+.jaar-menu form { margin: 0; }
+.jaar-menu button, .jaar-menu a {
+  display: flex; justify-content: space-between; width: 100%; min-height: 40px; padding: 8px 12px;
+  background: none; color: var(--tekst); font-weight: 600; text-align: left; border-radius: 6px; text-decoration: none;
+}
+.jaar-menu button:hover, .jaar-menu a:hover { background: color-mix(in srgb, var(--accent) 8%, var(--kaart)); }
+.jaar-menu button[aria-current] { background: color-mix(in srgb, var(--accent) 12%, var(--kaart)); color: var(--accent); }
+.jaar-menu a { color: var(--accent); font-weight: 500; }
+.jaar-menu form + a { border-top: 1px solid var(--rand); border-radius: 0 6px 6px 6px; margin-top: 4px; }
+/* instellingen: jaren */
+.jaar-rij { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.jaar-rij .klein-tekst { flex: 1; }
+.jaar-rij form { margin: 0; }
+.jaar-rij + .jaar-rij { border-top: 1px solid var(--rand); }
 /* een ouder jaar bekijken: niet per ongeluk daarin bewerken */
 .jaar-banner {
   display: flex; justify-content: center; align-items: center; gap: 8px; margin: 0;
   padding: 4px 12px; background: var(--overschot); color: #fff; font-size: .9rem;
 }
 .jaar-banner button.link { color: #fff; text-decoration: underline; font-size: .9rem; }
-.jaar-rij { display: flex; align-items: center; gap: 8px; justify-content: space-between; min-height: 44px; }
-.jaar-rij + .jaar-rij { border-top: 1px solid var(--rand); }
 
 /* meldingen */
 #melding { position: sticky; top: 54px; z-index: 9; max-width: 760px; margin: 0 auto; padding: 0 16px; }
@@ -411,3 +427,35 @@ a.knop.secundair { font-weight: 500; }
 .wachtwoord-veld .oog-dicht, .wachtwoord-veld [aria-pressed=true] .oog-open { display: none; }
 .wachtwoord-veld [aria-pressed=true] .oog-dicht { display: contents; }
 label[for=wachtwoord] { margin-bottom: 4px; }
+
+/* over de jaren: grafiek (kleuren gecontroleerd op kleurenblindheid, licht en donker apart) */
+:root {
+  --serie-1: #2a78d6; --serie-2: #eb6834; --serie-3: #1baf7a; --serie-4: #eda100;
+  --raster: #e1e0d9; --as: #c3c2b7; --as-tekst: #898781;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --serie-1: #3987e5; --serie-2: #d95926; --serie-3: #199e70; --serie-4: #c98500; --raster: #3a352f; --as: #4a443b; }
+}
+.serie-basis { fill: var(--serie-1); background: var(--serie-1); }
+.serie-klein { fill: var(--serie-2); background: var(--serie-2); }
+.serie-iets_luxer { fill: var(--serie-3); background: var(--serie-3); }
+.serie-luxe { fill: var(--serie-4); background: var(--serie-4); }
+.lead { color: var(--zacht); margin: 0 0 12px; }
+.grafiek-kaart h2 { margin: 0 0 4px; }
+.legenda { display: flex; flex-wrap: wrap; gap: 4px 16px; list-style: none; margin: 0 0 8px; padding: 0; font-size: .85rem; color: var(--zacht); }
+.legenda li { display: flex; align-items: center; gap: 6px; }
+.legenda .sleutel { width: 10px; height: 10px; border-radius: 2px; }
+.grafiek { display: block; overflow: visible; }
+.grafiek .raster { stroke: var(--raster); stroke-width: 1; }
+.grafiek .as { stroke: var(--as); stroke-width: 1; }
+.grafiek .as-tekst { fill: var(--as-tekst); font-size: 12px; font-variant-numeric: tabular-nums; }
+.grafiek .kap { fill: var(--tekst); font-size: 13px; font-weight: 600; text-anchor: middle; }
+.grafiek .jaar-as { fill: var(--zacht); font-size: 13px; text-anchor: middle; }
+.grafiek path { cursor: default; outline: none; }
+.grafiek path:hover, .grafiek path:focus-visible { filter: brightness(1.12); }
+.tabel-weergave { margin-top: 4px; }
+.tabel-weergave td { font-variant-numeric: tabular-nums; }
+.grafiek-tip {
+  position: fixed; z-index: 20; pointer-events: none; padding: 6px 10px; border-radius: 6px; font-size: .85rem;
+  background: var(--tekst); color: var(--kaart); box-shadow: 0 4px 12px rgb(0 0 0 / .2); white-space: nowrap;
+}

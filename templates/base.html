@@ -16,8 +16,18 @@
       <a href="{{ url_for('via', code=v.code) }}" class="via-link {{ 'actief' if request.view_args and request.view_args.get('code') == v.code }}">{{ v.code }}</a>
     {% endfor %}
     <a href="{{ url_for('aankopen') }}" class="{{ 'actief' if request.endpoint in ('aankopen', 'aankoop_nieuw', 'aankoop_bewerk') }}">Aankopen</a>
-    <a href="{{ url_for('jaren') }}" class="jaar-link {{ 'actief' if request.endpoint == 'jaren' }}" title="Jaar kiezen of aanmaken">{{ jaar }}</a>
+    <button type="button" class="jaar-link" popovertarget="jaar-menu" aria-label="Jaar kiezen">{{ jaar }} <span aria-hidden="true">▾</span></button>
   </nav>
+  {# buiten de nav: die scrollt horizontaal en zou het menu afknippen #}
+  <div popover id="jaar-menu" class="jaar-menu">
+    <form method="post" action="{{ url_for('jaar_kiezen') }}">
+      {% for j in alle_jaren %}
+      <button name="jaar" value="{{ j }}" {% if j == jaar %}aria-current="true"{% endif %}>{{ j }}{% if j == jaar %} <span aria-hidden="true">✓</span>{% endif %}</button>
+      {% endfor %}
+    </form>
+    <a href="{{ url_for('over_de_jaren') }}">Over de jaren</a>
+    <a href="{{ url_for('instellingen') }}">Instellingen</a>
+  </div>
   {% if jaar != nieuwste_jaar %}
   <form class="jaar-banner" method="post" action="{{ url_for('jaar_kiezen') }}">
     <span>Je bekijkt <strong>{{ jaar }}</strong></span>

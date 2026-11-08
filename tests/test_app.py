@@ -353,14 +353,14 @@ def test_inloggen_onder_prefix(anoniem):
 def test_jaar_aanmaken_en_wisselen(client, conn):
     logic.klant_opslaan(conn, J, None, "dd", "Piet", "", 7, 0, {})
     tekst = client.get("/").text
-    assert f'aanmaken">{J}</a>' in tekst and "Je bekijkt" not in tekst
+    assert f'aria-label="Jaar kiezen">{J} ' in tekst and "Je bekijkt" not in tekst
 
     r = client.post("/jaren", data={"jaar": "2020"})
     assert r.status_code == 303
     tekst = client.get("/").text
     assert "Je bekijkt <strong>2020</strong>" in tekst and '<td class="nog">7</td>' not in tekst
     assert "2020 aangemaakt." in tekst
-    assert "2020" in client.get("/jaren").text
+    assert 'value="2020" aria-current="true"' in client.get("/instellingen").text  # in het jaarmenu
 
     client.post("/jaar", data={"jaar": str(J)})
     tekst = client.get("/").text
@@ -383,3 +383,27 @@ def test_onbekend_jaar(client):
     assert "Onbekend jaar" in r.text
     r = client.post("/jaren", data={"jaar": str(J)}, headers=HTMX)
     assert "bestaat al" in r.text
+
+
+def test_jaar_verwijderen_met_waarschuwing(client, conn):
+    logic.jaar_aanmaken(conn, 2020)
+    logic.klant_opslaan(conn, J, None, "dd", "Piet", "", 1, 0, {})
+    tekst = client.get("/instellingen").text
+    assert f"Let op: {J} is niet leeg. 1 bestellingen, 0 bonnen gaan definitief weg." in tekst
+    assert 'hx-confirm="2020 verwijderen?"' in tekst
+    client.post("/jaar", data={"jaar": str(J)})
+    r = client.post(f"/jaar/{J}/verwijder")
+    assert r.status_code == 303 and logic.jaren(conn) == [2020]
+    tekst = client.get("/").text  # het gekozen jaar is weg: dan het nieuwste
+    assert "Je bekijkt" not in tekst and f"{J} verwijderd." in tekst
+    assert "verwijderen?" not in client.get("/instellingen").text  # het laatste jaar blijft
+
+
+def test_over_de_jaren(client, conn):
+    logic.jaar_aanmaken(conn, 2020)
+    logic.klant_opslaan(conn, 2020, None, "dd", "Piet", "", 1, 0, {})
+    logic.aankoop_opslaan(conn, 2020, None, "B", [{"naam": "Krug", "categorie": "luxe", "prijs": "30",
+                                                   "verdeling": {"dd": 2}}])
+    tekst = client.get("/over-de-jaren").text
+    assert 'data-tip="2020 · Luxe: 2 flessen"' in tekst and "Als tabel" in tekst
+    assert 'href="/over-de-jaren"' in tekst  # in het jaarmenu
