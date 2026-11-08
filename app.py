@@ -18,7 +18,7 @@ import logic
 import presentatie
 from logic import CATEGORIEEN, KOSTEN_VERDELINGEN, ZOEK_CATEGORIEEN, ValidatieFout
 
-load_dotenv(pathlib.Path(__file__) / '.env')
+load_dotenv(pathlib.Path(__file__).parent / '.env')
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
